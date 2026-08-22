@@ -1096,65 +1096,68 @@ function renderTerminalPriceChart(candles, signals, strategyType) {
         state.terminalChartInstance.destroy();
     }
 
-    const labels = candles.map(c => c.time);
-    const closePrices = candles.map(c => c.close);
+    // Parse UTC datetime strings to unix timestamps for timeseries scale
+    const chartData = candles.map(c => {
+        const dt = luxon.DateTime.fromFormat(c.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' });
+        return {
+            x: dt.valueOf(),
+            o: c.open,
+            h: c.high,
+            l: c.low,
+            c: c.close
+        };
+    });
 
-    const buyData = new Array(candles.length).fill(null);
-    const sellData = new Array(candles.length).fill(null);
-    
+    const buyData = [];
+    const sellData = [];
+
     signals.forEach(sig => {
-        const idx = candles.findIndex(c => c.time === sig.time);
-        if (idx !== -1) {
+        const dt = luxon.DateTime.fromFormat(sig.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' });
+        if (dt.isValid) {
             if (sig.kind === 'BUY') {
-                buyData[idx] = sig.price;
+                buyData.push({ x: dt.valueOf(), y: sig.price });
             } else if (sig.kind === 'SELL') {
-                sellData[idx] = sig.price;
+                sellData.push({ x: dt.valueOf(), y: sig.price });
             }
         }
     });
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.15)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
-
     state.terminalChartInstance = new Chart(ctx, {
-        type: 'line',
+        type: 'candlestick',
         data: {
-            labels: labels,
             datasets: [
                 {
-                    label: 'Price (Close)',
-                    data: closePrices,
-                    borderColor: '#3b82f6',
-                    borderWidth: 2,
-                    backgroundColor: gradient,
-                    fill: true,
-                    tension: 0.1,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
+                    label: 'Price',
+                    data: chartData,
+                    color: {
+                        up: '#10b981', // green candle
+                        down: '#ef4444', // red candle
+                        unchanged: '#9ca3af'
+                    },
+                    borderColor: '#374151',
                     order: 3
                 },
                 {
                     label: 'BUY Signal',
                     data: buyData,
+                    type: 'scatter',
                     borderColor: '#10b981',
                     backgroundColor: '#10b981',
                     pointStyle: 'triangle',
                     pointRadius: 8,
                     pointHoverRadius: 10,
-                    showLine: false,
                     order: 1
                 },
                 {
                     label: 'SELL Signal',
                     data: sellData,
+                    type: 'scatter',
                     borderColor: '#ef4444',
                     backgroundColor: '#ef4444',
                     pointStyle: 'triangle',
                     rotation: 180,
                     pointRadius: 8,
                     pointHoverRadius: 10,
-                    showLine: false,
                     order: 2
                 }
             ]
@@ -1162,10 +1165,7 @@ function renderTerminalPriceChart(candles, signals, strategyType) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
+            parsing: false,
             plugins: {
                 legend: {
                     display: true,
@@ -1181,6 +1181,13 @@ function renderTerminalPriceChart(candles, signals, strategyType) {
             },
             scales: {
                 x: {
+                    type: 'timeseries',
+                    time: {
+                        unit: 'minute',
+                        displayFormats: {
+                            minute: 'yyyy-MM-dd HH:mm'
+                        }
+                    },
                     grid: { color: 'rgba(255, 255, 255, 0.02)' },
                     ticks: {
                         color: '#9ca3af',
