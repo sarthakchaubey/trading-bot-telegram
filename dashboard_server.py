@@ -15,7 +15,9 @@ import pandas as pd
 
 import config as cfg
 import twelvedata_feed
-from strategy import run_strategy, Event
+import strategy as fib_strategy
+import custom_strategy_template as breakout_strategy
+from strategy import Event
 
 # ============================================================================
 # Core Server Setup
@@ -134,7 +136,13 @@ class BotWorker:
                 count=cfg_mock.CANDLE_HISTORY_COUNT,
                 granularity=self.config["granularity"]
             )
-            events = run_strategy(df, cfg_mock)
+            # Route to correct strategy execution logic
+            strat_type = self.config.get("strategy_type", "Fibonacci")
+            if strat_type == "MomentumBreakout":
+                events = breakout_strategy.run_strategy(df, cfg_mock)
+            else:
+                events = fib_strategy.run_strategy(df, cfg_mock)
+
             if events:
                 self.last_alert_time = events[-1].time
                 self.log(f"Primed successfully. Last historical signal found at {events[-1].time.strftime('%Y-%m-%d %H:%M UTC')}")
@@ -155,7 +163,12 @@ class BotWorker:
                 if df.empty:
                     self.log("Warning: Fetched empty data frame.")
                 else:
-                    events = run_strategy(df, cfg_mock)
+                    strat_type = self.config.get("strategy_type", "Fibonacci")
+                    if strat_type == "MomentumBreakout":
+                        events = breakout_strategy.run_strategy(df, cfg_mock)
+                    else:
+                        events = fib_strategy.run_strategy(df, cfg_mock)
+
                     new_events = [e for e in events if self.last_alert_time is None or e.time > self.last_alert_time]
                     
                     for event in new_events:
@@ -276,6 +289,7 @@ class StrategyConfigSchema(BaseModel):
     max_consolidation_atr: float
     telegram_enabled: bool
     status: str
+    strategy_type: str = "Fibonacci"
 
 class BacktestRequestSchema(BaseModel):
     strategy_id: str
@@ -527,7 +541,12 @@ def run_backtest(req: BacktestRequestSchema):
         if df.empty:
             raise HTTPException(status_code=400, detail="Twelve Data returned no candle data.")
 
-        events = run_strategy(df, cfg_mock)
+        strat_type = strat.get("strategy_type", "Fibonacci")
+        if strat_type == "MomentumBreakout":
+            events = breakout_strategy.run_strategy(df, cfg_mock)
+        else:
+            events = fib_strategy.run_strategy(df, cfg_mock)
+
         trades, wins, losses = simulate_trades(df, events)
 
         # Calculate metrics

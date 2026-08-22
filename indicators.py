@@ -53,3 +53,20 @@ def pivot_low(series: pd.Series, left: int, right: int) -> pd.Series:
         if center == window.min() and (window == center).sum() == 1:
             out.iloc[i] = center
     return out
+
+
+def rsi(series: pd.Series, length: int) -> pd.Series:
+    """
+    RSI calculation matching TradingView's ta.rsi (Wilder's moving average smoothing).
+    """
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    
+    # Wilder's moving average of length N is equivalent to an EMA of span 2N - 1
+    wilder_span = 2 * length - 1
+    avg_gain = gain.ewm(span=wilder_span, adjust=False).mean()
+    avg_loss = loss.ewm(span=wilder_span, adjust=False).mean()
+    
+    rs = avg_gain / avg_loss.replace(0, 1e-9)
+    return 100 - (100 / (1 + rs))

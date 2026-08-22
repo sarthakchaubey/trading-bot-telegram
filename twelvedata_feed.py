@@ -75,12 +75,15 @@ def generate_mock_candles(instrument: str, count: int, interval: str) -> pd.Data
         open_p = prices[i-1] if i > 0 else close_p - np.random.normal(0, pip_scale)
         high_p = max(open_p, close_p) + abs(np.random.normal(0, 4 * pip_scale))
         low_p = min(open_p, close_p) - abs(np.random.normal(0, 4 * pip_scale))
+        # Add random volume
+        vol = float(np.random.randint(100, 2000))
         rows.append({
             "time": t,
             "open": round(open_p, 5),
             "high": round(high_p, 5),
             "low": round(low_p, 5),
             "close": round(close_p, 5),
+            "volume": vol,
         })
 
     df = pd.DataFrame(rows)
@@ -216,6 +219,7 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
             "high": float(candle["high"]),
             "low": float(candle["low"]),
             "close": float(candle["close"]),
+            "volume": float(candle.get("volume", 0)),
         })
 
     df = pd.DataFrame(rows)

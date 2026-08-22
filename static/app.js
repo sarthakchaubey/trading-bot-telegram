@@ -356,6 +356,9 @@ function renderStrategies() {
                 <div>
                     <h3>${strat.name}</h3>
                     <p>${strat.instrument} &bull; ${strat.granularity}</p>
+                    <small style="color: var(--primary); font-size: 11px; font-weight: 600; display: block; margin-top: 4px;">
+                        ${strat.strategy_type === 'MomentumBreakout' ? 'Momentum Breakout' : 'Swing Fibonacci'}
+                    </small>
                 </div>
                 <span class="bot-badge ${strat.status}">${strat.status}</span>
             </div>
@@ -447,6 +450,7 @@ function openStrategyModal(stratId = '') {
         document.getElementById('strat-telegram').checked = strat.telegram_enabled;
         document.getElementById('strat-price-source').value = strat.price_source;
         document.getElementById('strat-signal-level').value = strat.signal_level;
+        document.getElementById('strat-type').value = strat.strategy_type || 'Fibonacci';
         
         document.getElementById('strat-bull-tp').value = strat.bull_tp_level;
         document.getElementById('strat-bull-sl').value = strat.bull_sl_level;
@@ -490,6 +494,7 @@ function openStrategyModal(stratId = '') {
         title.textContent = "Create New Strategy";
         document.getElementById('strat-id').value = '';
         document.getElementById('strat-status').value = 'inactive';
+        document.getElementById('strat-type').value = 'Fibonacci';
         
         // Populate standard default parameters
         document.getElementById('strat-left-bars').value = 5;
@@ -539,6 +544,7 @@ async function handleSaveStrategy(e) {
         telegram_enabled: document.getElementById('strat-telegram').checked,
         price_source: document.getElementById('strat-price-source').value,
         signal_level: document.getElementById('strat-signal-level').value,
+        strategy_type: document.getElementById('strat-type').value,
         bull_tp_level: document.getElementById('strat-bull-tp').value,
         bull_sl_level: document.getElementById('strat-bull-sl').value,
         bear_tp_level: document.getElementById('strat-bear-tp').value,
