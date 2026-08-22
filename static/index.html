@@ -88,6 +88,70 @@
                             <p class="stat-value" id="stat-last-check">Never</p>
                         </div>
                     </div>
+                    <div class="stat-card donut-stat-card">
+                        <div class="donut-chart-container">
+                            <canvas id="signals-donut-chart"></canvas>
+                        </div>
+                        <div class="stat-details">
+                            <h3>BUY/SELL Ratio</h3>
+                            <p class="stat-value" id="stat-signal-ratio">0:0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Trade Terminal -->
+                <div class="card mb-4">
+                    <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
+                        <h2 style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="candlestick-chart" style="color: var(--primary);"></i>
+                            Interactive Trade Terminal
+                        </h2>
+                        <div class="card-actions" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 12px; color: var(--text-muted);">Instrument:</label>
+                                <select id="terminal-instrument" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
+                                    <option value="EUR_USD">EUR_USD</option>
+                                    <option value="GBP_USD">GBP_USD</option>
+                                    <option value="USD_JPY">USD_JPY</option>
+                                    <option value="XAU_USD">XAU_USD</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 12px; color: var(--text-muted);">Time Frame:</label>
+                                <select id="terminal-granularity" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
+                                    <option value="M1">M1 (1m)</option>
+                                    <option value="M5">M5 (5m)</option>
+                                    <option value="M15" selected>M15 (15m)</option>
+                                    <option value="M30">M30 (30m)</option>
+                                    <option value="H1">H1 (1h)</option>
+                                    <option value="H4">H4 (4h)</option>
+                                    <option value="D">D (1d)</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 12px; color: var(--text-muted);">Strategy:</label>
+                                <select id="terminal-strategy" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
+                                    <option value="Fibonacci">Swing Fibonacci</option>
+                                    <option value="MomentumBreakout">Momentum Breakout</option>
+                                </select>
+                            </div>
+                            <button id="btn-terminal-load" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; border-radius: 6px;">
+                                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Update Chart
+                            </button>
+                            <button id="btn-terminal-trade" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; background-color: var(--success); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);">
+                                <i data-lucide="play" style="width: 14px; height: 14px;"></i> Start Trading
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container" style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="terminal-price-chart"></canvas>
+                        </div>
+                        <div class="mt-2" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted);">
+                            <span id="terminal-status-text">Select parameters and click "Update Chart" to load history and strategy signals.</span>
+                            <span id="terminal-metrics-text"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="dashboard-columns">
@@ -170,31 +234,47 @@
             <section id="view-backtesting" class="content-view">
                 <div class="card">
                     <div class="card-body">
-                        <form id="backtest-form" class="backtest-form-layout">
-                            <div class="form-group">
-                                <label for="backtest-strat-select">Strategy Configuration</label>
-                                <select id="backtest-strat-select" class="form-control" required>
-                                    <option value="">Choose Strategy</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="backtest-count">Candles History Count (Backtest Size)</label>
-                                <div class="range-slider-wrapper">
-                                    <input type="range" id="backtest-count" min="100" max="2000" step="50" value="500" class="form-control-range">
-                                    <span id="backtest-count-val">500</span>
+                        <form id="backtest-form">
+                            <div class="backtest-form-layout">
+                                <div class="form-group">
+                                    <label for="backtest-strat-select">Primary Strategy</label>
+                                    <select id="backtest-strat-select" class="form-control" required>
+                                        <option value="">Choose Strategy</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="compare-strat-group" style="display: none;">
+                                    <label for="backtest-compare-select">Comparison Strategy</label>
+                                    <select id="backtest-compare-select" class="form-control">
+                                        <option value="">Choose Comparison Strategy</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 0.8;">
+                                    <label for="backtest-count">Candles History Count</label>
+                                    <div class="range-slider-wrapper">
+                                        <input type="range" id="backtest-count" min="100" max="2000" step="50" value="500" class="form-control-range">
+                                        <span id="backtest-count-val">500</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="form-group form-checkbox-group">
-                                <label class="checkbox-container">
-                                    <input type="checkbox" id="backtest-refresh">
-                                    <span class="checkmark"></span>
-                                    Bypass Cache (Force API Fetch)
-                                </label>
-                            </div>
-                            <div class="form-group-btn">
-                                <button type="submit" class="btn btn-primary btn-block" id="btn-run-backtest">
-                                    <i data-lucide="play"></i> Run Backtest
-                                </button>
+                            
+                            <div class="form-row mt-3" style="align-items: center; justify-content: space-between;">
+                                <div class="form-group form-checkbox-group" style="margin-bottom: 0; display: flex; gap: 24px; flex-direction: row;">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="backtest-compare-enable">
+                                        <span class="checkmark"></span>
+                                        Enable Strategy Comparison
+                                    </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="backtest-refresh">
+                                        <span class="checkmark"></span>
+                                        Bypass Cache (Force API Fetch)
+                                    </label>
+                                </div>
+                                <div class="form-group-btn" style="width: 200px;">
+                                    <button type="submit" class="btn btn-primary btn-block" id="btn-run-backtest">
+                                        <i data-lucide="play"></i> Run Backtest
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -234,6 +314,32 @@
                                 <div class="chart-container">
                                     <canvas id="equity-chart"></canvas>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Comparison Metrics Table -->
+                    <div class="card mt-4" id="backtest-comparison-card" style="display: none;">
+                        <div class="card-header">
+                            <h2>Strategy Performance Comparison</h2>
+                            <i data-lucide="git-compare"></i>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-striped text-center">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-left">Performance Metric</th>
+                                            <th id="comp-label-primary">Primary Strategy</th>
+                                            <th id="comp-label-secondary">Comparison Strategy</th>
+                                            <th>Difference</th>
+                                            <th>Winner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="comparison-tbody">
+                                        <!-- Dynamic comparison rows -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>

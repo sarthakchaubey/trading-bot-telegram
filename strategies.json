@@ -3,7 +3,7 @@
     "id": "eur_usd_m15_default",
     "name": "EUR/USD Standard M15",
     "instrument": "EUR_USD",
-    "granularity": "M15",
+    "granularity": "M30",
     "use_time_filter": false,
     "start_hour": 8,
     "start_minute": 0,
@@ -49,7 +49,7 @@
     "consolidation_atr_length": 14,
     "max_consolidation_atr": 3.0,
     "telegram_enabled": true,
-    "status": "inactive",
+    "status": "active",
     "strategy_type": "Fibonacci"
   },
   {

@@ -11,7 +11,9 @@ let state = {
     selectedLogStrategyId: '',
     logInterval: null,
     statusInterval: null,
-    equityChartInstance: null
+    equityChartInstance: null,
+    donutChartInstance: null,
+    terminalChartInstance: null
 };
 
 // ============================================================================
@@ -75,10 +77,24 @@ document.addEventListener('DOMContentLoaded', () => {
         sliderVal.textContent = e.target.value;
     });
 
+    // Backtest comparison toggle
+    document.getElementById('backtest-compare-enable').addEventListener('change', (e) => {
+        const group = document.getElementById('compare-strat-group');
+        group.style.display = e.target.checked ? 'block' : 'none';
+        document.getElementById('backtest-compare-select').required = e.target.checked;
+    });
+
+    // Terminal Event Listeners
+    document.getElementById('btn-terminal-load').addEventListener('click', updateTerminalChart);
+    document.getElementById('btn-terminal-trade').addEventListener('click', startTerminalTrading);
+
     // Initial data fetch
     fetchStrategies();
     fetchSignals();
     fetchBotStatuses();
+    
+    // Initial terminal load
+    updateTerminalChart();
 
     // Setup periodic polling loops (every 3 seconds)
     state.statusInterval = setInterval(() => {
@@ -212,10 +228,53 @@ function updateOverviewCards() {
         if (times.length > 0) {
             const latest = new Date(Math.max(...times.map(t => new Date(t))));
             document.getElementById('stat-last-check').textContent = latest.toLocaleTimeString();
-            return;
+        } else {
+            document.getElementById('stat-last-check').textContent = 'Never';
         }
+    } else {
+        document.getElementById('stat-last-check').textContent = 'Never';
     }
-    document.getElementById('stat-last-check').textContent = 'Never';
+
+    // Count BUY vs SELL signals
+    let buyCount = 0;
+    let sellCount = 0;
+    state.signals.forEach(sig => {
+        if (sig.type === 'BUY') buyCount++;
+        if (sig.type === 'SELL') sellCount++;
+    });
+
+    document.getElementById('stat-signal-ratio').textContent = `${buyCount}:${sellCount}`;
+
+    // Render Donut Chart
+    const canvas = document.getElementById('signals-donut-chart');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (state.donutChartInstance) {
+            state.donutChartInstance.destroy();
+        }
+        
+        state.donutChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['BUY', 'SELL'],
+                datasets: [{
+                    data: [buyCount || 1, sellCount || 1], // default 1:1 if empty to show gray chart
+                    backgroundColor: (buyCount || sellCount) ? ['#2dd4bf', '#ff4335'] : ['#1e293b', '#1e293b'],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: (buyCount || sellCount) ? true : false }
+                },
+                cutout: '70%',
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
 }
 
 // Render active bot cards on dashboard
@@ -236,7 +295,16 @@ function renderBotStatuses() {
         card.innerHTML = `
             <div class="bot-info">
                 <span class="bot-title">${bot.name}</span>
-                <span class="bot-subtitle">${bot.instrument} (${bot.granularity})</span>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                    <span class="bot-subtitle" style="margin-top: 0;">${bot.instrument}</span>
+                    <select onchange="changeBotTimeframe('${bot.id}', this.value)" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer;">
+                        <option value="M5" ${bot.granularity === 'M5' ? 'selected' : ''}>5m</option>
+                        <option value="M15" ${bot.granularity === 'M15' ? 'selected' : ''}>15m</option>
+                        <option value="M30" ${bot.granularity === 'M30' ? 'selected' : ''}>30m</option>
+                        <option value="H1" ${bot.granularity === 'H1' ? 'selected' : ''}>1h</option>
+                        ${['M1', 'H4', 'D'].includes(bot.granularity) ? `<option value="${bot.granularity}" selected>${bot.granularity}</option>` : ''}
+                    </select>
+                </div>
             </div>
             <div class="bot-state">
                 <span class="bot-badge ${bot.status}">${bot.status}</span>
@@ -413,12 +481,22 @@ function renderStrategies() {
 // Backtest selectors populate
 function populateBacktestSelector() {
     const select = document.getElementById('backtest-strat-select');
+    const compSelect = document.getElementById('backtest-compare-select');
+    
     const curVal = select.value;
-    select.innerHTML = '<option value="">Choose Strategy Preset</option>';
+    const curCompVal = compSelect.value;
+    
+    select.innerHTML = '<option value="">Choose Strategy</option>';
+    compSelect.innerHTML = '<option value="">Choose Comparison Strategy</option>';
+    
     state.strategies.forEach(s => {
-        select.innerHTML += `<option value="${s.id}">${s.name} (${s.instrument} @ ${s.granularity})</option>`;
+        const option = `<option value="${s.id}">${s.name} (${s.instrument} @ ${s.granularity})</option>`;
+        select.innerHTML += option;
+        compSelect.innerHTML += option;
     });
+    
     select.value = curVal;
+    compSelect.value = curCompVal;
 }
 
 // ============================================================================
@@ -650,6 +728,9 @@ async function handleRunBacktest(e) {
     const count = parseInt(document.getElementById('backtest-count').value);
     const forceRefresh = document.getElementById('backtest-refresh').checked;
 
+    const compareEnable = document.getElementById('backtest-compare-enable').checked;
+    const compareStratId = document.getElementById('backtest-compare-select').value;
+
     if (!stratId) return;
 
     const btn = document.getElementById('btn-run-backtest');
@@ -658,23 +739,53 @@ async function handleRunBacktest(e) {
     lucide.createIcons();
 
     try {
-        const resp = await fetch(`${API_BASE}/api/backtest`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                strategy_id: stratId,
-                count: count,
-                force_refresh: forceRefresh
-            })
-        });
+        if (compareEnable && compareStratId) {
+            // Run BOTH backtests in parallel
+            const [resp1, resp2] = await Promise.all([
+                fetch(`${API_BASE}/api/backtest`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ strategy_id: stratId, count: count, force_refresh: forceRefresh })
+                }),
+                fetch(`${API_BASE}/api/backtest`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ strategy_id: compareStratId, count: count, force_refresh: forceRefresh })
+                })
+            ]);
 
-        if (!resp.ok) {
-            const errBody = await resp.json();
-            throw new Error(errBody.detail || "Backtest failed.");
+            if (!resp1.ok) {
+                const errBody = await resp1.json();
+                throw new Error("Primary backtest failed: " + (errBody.detail || "Unknown error"));
+            }
+            if (!resp2.ok) {
+                const errBody = await resp2.json();
+                throw new Error("Comparison backtest failed: " + (errBody.detail || "Unknown error"));
+            }
+
+            const data1 = await resp1.json();
+            const data2 = await resp2.json();
+
+            displayBacktestResults(data1, data2);
+        } else {
+            const resp = await fetch(`${API_BASE}/api/backtest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    strategy_id: stratId,
+                    count: count,
+                    force_refresh: forceRefresh
+                })
+            });
+
+            if (!resp.ok) {
+                const errBody = await resp.json();
+                throw new Error(errBody.detail || "Backtest failed.");
+            }
+
+            const data = await resp.json();
+            displayBacktestResults(data);
         }
-
-        const data = await resp.json();
-        displayBacktestResults(data);
     } catch (err) {
         alert("Backtest Error: " + err.message);
     } finally {
@@ -687,12 +798,13 @@ async function handleRunBacktest(e) {
 function runQuickBacktest(stratId) {
     switchView('backtesting');
     document.getElementById('backtest-strat-select').value = stratId;
+    document.getElementById('backtest-compare-enable').checked = false;
+    document.getElementById('compare-strat-group').style.display = 'none';
     const form = document.getElementById('backtest-form');
-    // programmatically trigger submit
     form.dispatchEvent(new Event('submit'));
 }
 
-function displayBacktestResults(data) {
+function displayBacktestResults(data, dataComp = null) {
     document.getElementById('backtest-results').style.display = 'block';
 
     const m = data.metrics;
@@ -707,7 +819,7 @@ function displayBacktestResults(data) {
     document.getElementById('bt-total-trades').textContent = m.total_trades;
     document.getElementById('bt-open-trades').textContent = `${m.open_trades} Open Trades`;
 
-    // Render Trade table
+    // Render Trade table for Primary strategy
     const tbody = document.getElementById('backtest-trades-tbody');
     tbody.innerHTML = '';
 
@@ -735,13 +847,82 @@ function displayBacktestResults(data) {
         });
     }
 
-    // Render Growth Line Chart
-    renderEquityChart(data.trades);
+    // Handle comparison table
+    const compCard = document.getElementById('backtest-comparison-card');
+    if (dataComp) {
+        compCard.style.display = 'block';
+        document.getElementById('comp-label-primary').textContent = data.strategy.name;
+        document.getElementById('comp-label-secondary').textContent = dataComp.strategy.name;
+
+        const mComp = dataComp.metrics;
+        const compTbody = document.getElementById('comparison-tbody');
+        
+        // Define metrics rows
+        const metricsRows = [
+            {
+                name: "Net Return (%)",
+                val1: m.net_profit_pct,
+                val2: mComp.net_profit_pct,
+                format: (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`,
+                better: (v1, v2) => v1 > v2
+            },
+            {
+                name: "Win Rate (%)",
+                val1: parseFloat(m.win_rate),
+                val2: parseFloat(mComp.win_rate),
+                format: (v) => `${v.toFixed(1)}%`,
+                better: (v1, v2) => v1 > v2
+            },
+            {
+                name: "Max Drawdown (%)",
+                val1: m.max_drawdown_pct,
+                val2: mComp.max_drawdown_pct,
+                format: (v) => `${v.toFixed(2)}%`,
+                better: (v1, v2) => v1 < v2 // lower drawdown is better!
+            },
+            {
+                name: "Total Trades Executed",
+                val1: m.total_trades,
+                val2: mComp.total_trades,
+                format: (v) => v,
+                better: (v1, v2) => v1 > v2
+            }
+        ];
+
+        compTbody.innerHTML = '';
+        metricsRows.forEach(r => {
+            const tr = document.createElement('tr');
+            const diff = r.val1 - r.val2;
+            const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
+            const winner = r.better(r.val1, r.val2) ? data.strategy.name : (r.val1 === r.val2 ? 'Tie' : dataComp.strategy.name);
+            
+            const val1Class = r.better(r.val1, r.val2) ? 'text-green font-bold' : (r.val1 === r.val2 ? '' : 'text-muted');
+            const val2Class = r.better(r.val2, r.val1) ? 'text-green font-bold' : (r.val1 === r.val2 ? '' : 'text-muted');
+            const winnerClass = winner === 'Tie' ? 'text-muted' : 'text-green font-bold';
+
+            tr.innerHTML = `
+                <td class="text-left font-semibold">${r.name}</td>
+                <td class="${val1Class}">${r.format(r.val1)}</td>
+                <td class="${val2Class}">${r.format(r.val2)}</td>
+                <td>${diffStr}</td>
+                <td><span class="badge ${winner === 'Tie' ? 'bg-secondary' : 'bg-green-soft'} ${winnerClass}">${winner}</span></td>
+            `;
+            compTbody.appendChild(tr);
+        });
+
+        // Render dual chart
+        renderEquityChart(data.trades, dataComp.trades, data.strategy.name, dataComp.strategy.name);
+    } else {
+        compCard.style.display = 'none';
+        renderEquityChart(data.trades);
+    }
 }
 
 // Chart.js helper
-function renderEquityChart(trades) {
-    const ctx = document.getElementById('equity-chart').getContext('2d');
+function renderEquityChart(tradesPrimary, tradesComparison = null, labelPrimary = 'Primary Strategy', labelComparison = 'Comparison Strategy') {
+    const canvas = document.getElementById('equity-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
     // Destroy previous Chart instance
     if (state.equityChartInstance) {
@@ -749,54 +930,98 @@ function renderEquityChart(trades) {
     }
 
     const labels = ['Start'];
-    const values = [0.0];
-
-    trades.forEach((t, i) => {
+    const valuesPrimary = [0.0];
+    
+    tradesPrimary.forEach((t, i) => {
         labels.push(`Trade ${i + 1}`);
-        values.push(t.cumulative_pnl_pct);
+        valuesPrimary.push(t.cumulative_pnl_pct);
     });
+
+    const datasets = [];
+
+    // Create beautiful gradients
+    const gradient1 = ctx.createLinearGradient(0, 0, 0, 350);
+    gradient1.addColorStop(0, 'rgba(45, 212, 191, 0.35)');
+    gradient1.addColorStop(1, 'rgba(45, 212, 191, 0.00)');
+
+    datasets.push({
+        label: `${labelPrimary} (%)`,
+        data: valuesPrimary,
+        borderColor: '#2dd4bf', // mint green
+        borderWidth: 3,
+        backgroundColor: gradient1,
+        fill: true,
+        tension: 0.25,
+        pointRadius: valuesPrimary.length < 50 ? 4 : 1,
+        pointBackgroundColor: '#14b8a6',
+    });
+
+    if (tradesComparison) {
+        const valuesComparison = [0.0];
+        tradesComparison.forEach((t) => {
+            valuesComparison.push(t.cumulative_pnl_pct);
+        });
+
+        // Make sure labels match the maximum length of both
+        if (valuesComparison.length > labels.length) {
+            labels.length = 0;
+            labels.push('Start');
+            valuesComparison.forEach((_, idx) => {
+                if (idx > 0) labels.push(`Trade ${idx}`);
+            });
+        }
+
+        const gradient2 = ctx.createLinearGradient(0, 0, 0, 350);
+        gradient2.addColorStop(0, 'rgba(255, 67, 53, 0.35)');
+        gradient2.addColorStop(1, 'rgba(255, 67, 53, 0.00)');
+
+        datasets.push({
+            label: `${labelComparison} (%)`,
+            data: valuesComparison,
+            borderColor: '#ff4335', // red/amber
+            borderWidth: 3,
+            backgroundColor: gradient2,
+            fill: true,
+            tension: 0.25,
+            pointRadius: valuesComparison.length < 50 ? 4 : 1,
+            pointBackgroundColor: '#ef4444',
+        });
+    }
 
     state.equityChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [{
-                label: 'Cumulative Performance (%)',
-                data: values,
-                borderColor: '#3b82f6',
-                borderWidth: 3,
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                fill: true,
-                tension: 0.25,
-                pointRadius: values.length < 50 ? 4 : 1,
-                pointBackgroundColor: '#2563eb',
-            }]
+            datasets: datasets
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
+                legend: { 
+                    display: tradesComparison ? true : false,
+                    labels: { color: '#9ca3af' }
+                },
                 tooltip: {
-                    backgroundColor: '#1f2937',
+                    backgroundColor: '#0f172a',
                     titleColor: '#f3f4f6',
                     bodyColor: '#9ca3af',
-                    borderColor: '#374151',
+                    borderColor: '#1e293b',
                     borderWidth: 1,
                     callbacks: {
                         label: function(context) {
-                            return `Growth: ${context.parsed.y.toFixed(2)}%`;
+                            return `${context.dataset.label.split(' ')[0]}: ${context.parsed.y.toFixed(2)}%`;
                         }
                     }
                 }
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.02)' },
                     ticks: { color: '#9ca3af', font: { size: 11 } }
                 },
                 y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
                     ticks: {
                         color: '#9ca3af',
                         font: { size: 11 },
@@ -807,3 +1032,328 @@ function renderEquityChart(trades) {
         }
     });
 }
+
+// ============================================================================
+// INTERACTIVE TRADE TERMINAL SUPPORT
+// ============================================================================
+async function updateTerminalChart() {
+    const instrument = document.getElementById('terminal-instrument').value;
+    const granularity = document.getElementById('terminal-granularity').value;
+    const strategyType = document.getElementById('terminal-strategy').value;
+
+    const btn = document.getElementById('btn-terminal-load');
+    const statusText = document.getElementById('terminal-status-text');
+    const metricsText = document.getElementById('terminal-metrics-text');
+
+    if (!btn || !statusText || !metricsText) return;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width: 14px; height: 14px;"></i> Loading...`;
+    if (window.lucide) lucide.createIcons();
+
+    statusText.textContent = `Fetching data for ${instrument} (${granularity}) using ${strategyType}...`;
+    metricsText.textContent = "";
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                instrument: instrument,
+                granularity: granularity,
+                strategy_type: strategyType,
+                count: 300
+            })
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || "Failed to analyze chart.");
+        }
+
+        const data = await resp.json();
+        
+        statusText.textContent = `Analysis complete for ${instrument} (${granularity}).`;
+        metricsText.textContent = `${data.signals.length} Signals Generated`;
+
+        renderTerminalPriceChart(data.candles, data.signals, strategyType);
+    } catch (err) {
+        statusText.textContent = `Error: ${err.message}`;
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Update Chart`;
+        if (window.lucide) lucide.createIcons();
+    }
+}
+
+function renderTerminalPriceChart(candles, signals, strategyType) {
+    const canvas = document.getElementById('terminal-price-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    if (state.terminalChartInstance) {
+        state.terminalChartInstance.destroy();
+    }
+
+    const labels = candles.map(c => c.time);
+    const closePrices = candles.map(c => c.close);
+
+    const buyData = new Array(candles.length).fill(null);
+    const sellData = new Array(candles.length).fill(null);
+    
+    signals.forEach(sig => {
+        const idx = candles.findIndex(c => c.time === sig.time);
+        if (idx !== -1) {
+            if (sig.kind === 'BUY') {
+                buyData[idx] = sig.price;
+            } else if (sig.kind === 'SELL') {
+                sellData[idx] = sig.price;
+            }
+        }
+    });
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.15)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
+
+    state.terminalChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Price (Close)',
+                    data: closePrices,
+                    borderColor: '#3b82f6',
+                    borderWidth: 2,
+                    backgroundColor: gradient,
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 3
+                },
+                {
+                    label: 'BUY Signal',
+                    data: buyData,
+                    borderColor: '#10b981',
+                    backgroundColor: '#10b981',
+                    pointStyle: 'triangle',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    showLine: false,
+                    order: 1
+                },
+                {
+                    label: 'SELL Signal',
+                    data: sellData,
+                    borderColor: '#ef4444',
+                    backgroundColor: '#ef4444',
+                    pointStyle: 'triangle',
+                    rotation: 180,
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    showLine: false,
+                    order: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: '#9ca3af', boxWidth: 12 }
+                },
+                tooltip: {
+                    backgroundColor: '#0f172a',
+                    titleColor: '#f3f4f6',
+                    bodyColor: '#9ca3af',
+                    borderColor: '#374151',
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.02)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        font: { size: 10 },
+                        maxTicksLimit: 10
+                    }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        font: { size: 10 }
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function startTerminalTrading() {
+    const instrument = document.getElementById('terminal-instrument').value;
+    const granularity = document.getElementById('terminal-granularity').value;
+    const strategyType = document.getElementById('terminal-strategy').value;
+
+    const btn = document.getElementById('btn-terminal-trade');
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width: 14px; height: 14px;"></i> Starting...`;
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        await fetchStrategies();
+        
+        let existing = state.strategies.find(s => 
+            s.instrument === instrument && 
+            s.granularity === granularity && 
+            (s.strategy_type || 'Fibonacci') === strategyType
+        );
+
+        let strategyId = "";
+        let strategyName = "";
+
+        if (existing) {
+            strategyId = existing.id;
+            strategyName = existing.name;
+        } else {
+            strategyId = 'strat_' + Math.random().toString(36).substr(2, 9);
+            strategyName = `${instrument.replace('_', '/')} Auto ${strategyType} ${granularity}`;
+            
+            let minFib = 3.0;
+            if (instrument.includes("EUR_USD")) minFib = 0.0030;
+            else if (instrument.includes("GBP_USD")) minFib = 0.0035;
+            else if (instrument.includes("USD_JPY")) minFib = 0.30;
+            else if (instrument.includes("XAU_USD")) minFib = 3.0;
+            else minFib = 0.0030;
+
+            const payload = {
+                id: strategyId,
+                status: 'inactive',
+                name: strategyName,
+                instrument: instrument,
+                granularity: granularity,
+                telegram_enabled: true,
+                price_source: 'Wick',
+                signal_level: '0.618',
+                strategy_type: strategyType,
+                bull_tp_level: '0',
+                bull_sl_level: '1',
+                bear_tp_level: '0',
+                bear_sl_level: '1',
+                
+                left_bars: 5,
+                right_bars: 5,
+                min_swing_size: 0.0,
+                min_fib_range: minFib,
+                min_bars_between_swings: 1,
+                require_alternating_swings: true,
+                recalculate_on_extreme: false,
+
+                use_time_filter: false,
+                start_hour: 8,
+                start_minute: 0,
+                end_hour: 16,
+                end_minute: 0,
+
+                use_no_trade_1: true,
+                nt1_start_hour: 9,
+                nt1_start_minute: 30,
+                nt1_end_hour: 10,
+                nt1_end_minute: 0,
+
+                use_no_trade_2: false,
+                nt2_start_hour: 0,
+                nt2_start_minute: 0,
+                nt2_end_hour: 0,
+                nt2_end_minute: 0,
+
+                use_trend_filter: false,
+                trend_ma_type: 'SMA',
+                trend_length: 50,
+                trend_slope_bars: 5,
+                minimum_slope: 0.0,
+
+                use_candle_confirmation: false,
+                confirmation_type: 'Rejection Candle',
+                minimum_wick_ratio: 0.5,
+
+                use_consolidation_filter: false,
+                consolidation_length: 20,
+                consolidation_atr_length: 14,
+                max_consolidation_atr: 3.0
+            };
+
+            const saveResp = await fetch(`${API_BASE}/api/strategies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!saveResp.ok) throw new Error("Failed to save auto-strategy preset.");
+        }
+
+        const startResp = await fetch(`${API_BASE}/api/bot/start/${strategyId}`, {
+            method: 'POST'
+        });
+
+        if (!startResp.ok) throw new Error("Failed to start bot worker.");
+
+        await fetchStrategies();
+        await fetchBotStatuses();
+
+        const logSelect = document.getElementById('log-strategy-select');
+        if (logSelect) {
+            logSelect.value = strategyId;
+            state.selectedLogStrategyId = strategyId;
+            renderLogs();
+        }
+
+        alert(`Successfully started trading on ${strategyName}! Console logs are now connected.`);
+    } catch (err) {
+        alert("Trading Error: " + err.message);
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="play" style="width: 14px; height: 14px;"></i> Start Trading`;
+        if (window.lucide) lucide.createIcons();
+    }
+}
+
+async function changeBotTimeframe(strategyId, newGranularity) {
+    const strategy = state.strategies.find(s => s.id === strategyId);
+    if (!strategy) {
+        alert("Strategy configuration not found.");
+        return;
+    }
+
+    strategy.granularity = newGranularity;
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/strategies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(strategy)
+        });
+
+        if (!resp.ok) throw new Error("Failed to save updated strategy configuration.");
+
+        await fetchStrategies();
+        await fetchBotStatuses();
+    } catch (err) {
+        alert("Error changing timeframe: " + err.message);
+        console.error(err);
+    }
+}
+

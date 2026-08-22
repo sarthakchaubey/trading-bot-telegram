@@ -296,6 +296,13 @@ class BacktestRequestSchema(BaseModel):
     count: int = 500
     force_refresh: bool = False
 
+class AnalyzeRequestSchema(BaseModel):
+    instrument: str
+    granularity: str
+    strategy_type: str
+    count: int = 300
+
+
 # ============================================================================
 # API Routes
 # ============================================================================
@@ -594,6 +601,89 @@ def run_backtest(req: BacktestRequestSchema):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Backtest execution error: {str(e)}")
+
+@app.post("/api/analyze")
+def analyze_chart(req: AnalyzeRequestSchema):
+    min_fib = 3.0
+    if "EUR_USD" in req.instrument:
+        min_fib = 0.0030
+    elif "GBP_USD" in req.instrument:
+        min_fib = 0.0035
+    elif "USD_JPY" in req.instrument:
+        min_fib = 0.30
+    elif "XAU_USD" in req.instrument:
+        min_fib = 3.0
+    else:
+        min_fib = 0.0030
+
+    class ConfigMock:
+        pass
+        
+    cfg_mock = ConfigMock()
+    for attr in dir(cfg):
+        if attr.isupper():
+            setattr(cfg_mock, attr, getattr(cfg, attr))
+            
+    cfg_mock.MIN_SWING_SIZE = 0.0
+    cfg_mock.MIN_FIB_RANGE = min_fib
+    cfg_mock.LEFT_BARS = 5
+    cfg_mock.RIGHT_BARS = 5
+    cfg_mock.PRICE_SOURCE = "Wick"
+    cfg_mock.SIGNAL_LEVEL = "0.618"
+    cfg_mock.BULL_TP_LEVEL = "0"
+    cfg_mock.BULL_SL_LEVEL = "1"
+    cfg_mock.BEAR_TP_LEVEL = "0"
+    cfg_mock.BEAR_SL_LEVEL = "1"
+    cfg_mock._current_instrument = req.instrument
+    cfg_mock.MIN_FIB_RANGE_OVERRIDES = {}
+    cfg_mock.CANDLE_HISTORY_COUNT = req.count
+
+    try:
+        df = twelvedata_feed.get_candles(
+            req.instrument,
+            count=req.count,
+            granularity=req.granularity,
+            force_refresh=False
+        )
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Twelve Data returned no candle data.")
+
+        if req.strategy_type == "MomentumBreakout":
+            events = breakout_strategy.run_strategy(df, cfg_mock)
+        else:
+            events = fib_strategy.run_strategy(df, cfg_mock)
+
+        chart_candles = []
+        for _, row in df.iterrows():
+            chart_candles.append({
+                "time": row["time"].strftime('%Y-%m-%d %H:%M UTC'),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"])
+            })
+
+        signals = []
+        for e in events:
+            signals.append({
+                "kind": e.kind,
+                "time": e.time.strftime('%Y-%m-%d %H:%M UTC'),
+                "price": float(e.price),
+                "tp": float(e.tp) if e.tp else None,
+                "sl": float(e.sl) if e.sl else None
+            })
+
+        return {
+            "instrument": req.instrument,
+            "granularity": req.granularity,
+            "strategy_type": req.strategy_type,
+            "candles": chart_candles,
+            "signals": signals
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Chart analysis error: {str(e)}")
 
 # ============================================================================
 # Static Files Routing
