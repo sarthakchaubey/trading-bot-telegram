@@ -49,7 +49,7 @@
     "consolidation_atr_length": 14,
     "max_consolidation_atr": 3.0,
     "telegram_enabled": true,
-    "status": "active"
+    "status": "inactive"
   },
   {
     "id": "xau_usd_m15_default",
