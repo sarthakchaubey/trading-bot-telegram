@@ -1101,6 +1101,13 @@ function renderTerminalPriceChart(candles, signals, strategyType) {
         state.terminalChartInstance.destroy();
     }
 
+    // Sort candles chronologically (oldest -> newest) by parsing time
+    candles.sort((a, b) => {
+        const tA = luxon.DateTime.fromFormat(a.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' }).valueOf();
+        const tB = luxon.DateTime.fromFormat(b.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' }).valueOf();
+        return tA - tB;
+    });
+
     // Parse UTC datetime strings to unix timestamps for timeseries scale
     const chartData = candles.map(c => {
         const dt = luxon.DateTime.fromFormat(c.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' });

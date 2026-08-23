@@ -226,6 +226,9 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
     if df.empty:
         return df
 
+    # Sort chronologically (oldest -> newest)
+    df = df.sort_values("time", ascending=True).reset_index(drop=True)
+
     # Localize time to UTC
     df["time"] = df["time"].dt.tz_localize("UTC")
 
