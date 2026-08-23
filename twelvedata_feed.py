@@ -115,6 +115,8 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
                 cache_df["time"] = cache_df["time"].dt.tz_localize("UTC")
             else:
                 cache_df["time"] = cache_df["time"].dt.tz_convert("UTC")
+            if "volume" not in cache_df.columns:
+                cache_df["volume"] = 0.0
         except Exception as e:
             print(f"[Cache] Error reading cache file: {e}")
 
@@ -219,7 +221,7 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
             "high": float(candle["high"]),
             "low": float(candle["low"]),
             "close": float(candle["close"]),
-            "volume": float(candle.get("volume", 0)),
+            "volume": float(candle.get("volume", 0) or 0),
         })
 
     df = pd.DataFrame(rows)
