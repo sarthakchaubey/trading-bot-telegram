@@ -1059,6 +1059,12 @@ async function updateTerminalChart() {
     statusText.textContent = `Fetching data for ${instrument} (${granularity}) using ${strategyType}...`;
     metricsText.textContent = "";
 
+    const reasoningContainer = document.getElementById('ai-reasoning-container');
+    const reasoningText = document.getElementById('ai-reasoning-text');
+    if (reasoningContainer) {
+        reasoningContainer.style.display = 'none';
+    }
+
     try {
         const resp = await fetch(`${API_BASE}/api/analyze`, {
             method: 'POST',
@@ -1080,6 +1086,15 @@ async function updateTerminalChart() {
         
         statusText.textContent = `Analysis complete for ${instrument} (${granularity}).`;
         metricsText.textContent = `${data.signals.length} Signals Generated`;
+
+        if (reasoningContainer && reasoningText) {
+            if (data.reasoning) {
+                reasoningContainer.style.display = 'block';
+                reasoningText.textContent = data.reasoning;
+            } else {
+                reasoningContainer.style.display = 'none';
+            }
+        }
 
         renderTerminalPriceChart(data.candles, data.signals, strategyType);
     } catch (err) {

@@ -17,6 +17,7 @@ import config as cfg
 import twelvedata_feed
 import strategy as fib_strategy
 import custom_strategy_template as breakout_strategy
+import ai_strategy
 from strategy import Event
 
 # ============================================================================
@@ -158,6 +159,8 @@ class BotWorker:
             strat_type = self.config.get("strategy_type", "Fibonacci")
             if strat_type == "MomentumBreakout":
                 events = breakout_strategy.run_strategy(df, cfg_mock)
+            elif strat_type == "AIClaude":
+                events = ai_strategy.run_strategy(df, cfg_mock)
             else:
                 events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -184,6 +187,8 @@ class BotWorker:
                     strat_type = self.config.get("strategy_type", "Fibonacci")
                     if strat_type == "MomentumBreakout":
                         events = breakout_strategy.run_strategy(df, cfg_mock)
+                    elif strat_type == "AIClaude":
+                        events = ai_strategy.run_strategy(df, cfg_mock)
                     else:
                         events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -592,6 +597,8 @@ def run_backtest(req: BacktestRequestSchema):
         strat_type = strat.get("strategy_type", "Fibonacci")
         if strat_type == "MomentumBreakout":
             events = breakout_strategy.run_strategy(df, cfg_mock)
+        elif strat_type == "AIClaude":
+            events = ai_strategy.run_strategy(df, cfg_mock)
         else:
             events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -692,6 +699,8 @@ def analyze_chart(req: AnalyzeRequestSchema):
 
         if req.strategy_type == "MomentumBreakout":
             events = breakout_strategy.run_strategy(df, cfg_mock)
+        elif req.strategy_type == "AIClaude":
+            events = ai_strategy.run_strategy(df, cfg_mock)
         else:
             events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -715,12 +724,17 @@ def analyze_chart(req: AnalyzeRequestSchema):
                 "sl": float(e.sl) if e.sl else None
             })
 
+        reasoning = None
+        if req.strategy_type == "AIClaude":
+            reasoning = ai_strategy.get_last_reasoning()
+
         return {
             "instrument": req.instrument,
             "granularity": req.granularity,
             "strategy_type": req.strategy_type,
             "candles": chart_candles,
-            "signals": signals
+            "signals": signals,
+            "reasoning": reasoning
         }
     except Exception as e:
         traceback.print_exc()

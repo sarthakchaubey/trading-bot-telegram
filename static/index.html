@@ -137,6 +137,7 @@
                                 <select id="terminal-strategy" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
                                     <option value="Fibonacci">Swing Fibonacci</option>
                                     <option value="MomentumBreakout">Momentum Breakout</option>
+                                    <option value="AIClaude">Claude AI Analyst</option>
                                 </select>
                             </div>
                             <button id="btn-terminal-load" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; border-radius: 6px;">
@@ -151,9 +152,16 @@
                         <div class="chart-container" style="position: relative; height: 350px; width: 100%;">
                             <canvas id="terminal-price-chart"></canvas>
                         </div>
-                        <div class="mt-2" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted);">
+                        <div class="mt-2" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
                             <span id="terminal-status-text">Select parameters and click "Update Chart" to load history and strategy signals.</span>
                             <span id="terminal-metrics-text"></span>
+                        </div>
+                        <!-- AI Reasoning Panel -->
+                        <div id="ai-reasoning-container" style="display: none; margin-top: 16px; padding: 16px; border-radius: 8px; background: rgba(99, 102, 241, 0.06); border: 1px dashed var(--primary); font-family: 'Inter', sans-serif; transition: all 0.3s ease;">
+                            <h3 style="font-size: 13px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; margin-top: 0;">
+                                <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i> Claude AI Technical Analysis
+                            </h3>
+                            <p id="ai-reasoning-text" style="font-size: 12px; line-height: 1.6; color: var(--text-main); margin: 0; white-space: pre-line;"></p>
                         </div>
                     </div>
                 </div>
@@ -432,6 +440,7 @@
                                 <select id="strat-type" class="form-control">
                                     <option value="Fibonacci">Swing Fibonacci</option>
                                     <option value="MomentumBreakout">Momentum Exhaustion Breakout</option>
+                                    <option value="AIClaude">Claude AI Analyst</option>
                                 </select>
                             </div>
                             <div class="form-group col-2">
