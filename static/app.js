@@ -296,7 +296,12 @@ function renderBotStatuses() {
             <div class="bot-info">
                 <span class="bot-title">${bot.name}</span>
                 <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                    <span class="bot-subtitle" style="margin-top: 0;">${bot.instrument}</span>
+                    <select onchange="changeBotInstrument('${bot.id}', this.value)" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-muted); border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; font-weight: 500;">
+                        <option value="EUR_USD" ${bot.instrument === 'EUR_USD' ? 'selected' : ''}>EUR_USD</option>
+                        <option value="GBP_USD" ${bot.instrument === 'GBP_USD' ? 'selected' : ''}>GBP_USD</option>
+                        <option value="USD_JPY" ${bot.instrument === 'USD_JPY' ? 'selected' : ''}>USD_JPY</option>
+                        <option value="XAU_USD" ${bot.instrument === 'XAU_USD' ? 'selected' : ''}>XAU_USD</option>
+                    </select>
                     <select onchange="changeBotTimeframe('${bot.id}', this.value)" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer;">
                         <option value="M5" ${bot.granularity === 'M5' ? 'selected' : ''}>5m</option>
                         <option value="M15" ${bot.granularity === 'M15' ? 'selected' : ''}>15m</option>
@@ -1363,4 +1368,41 @@ async function changeBotTimeframe(strategyId, newGranularity) {
         console.error(err);
     }
 }
+
+async function changeBotInstrument(strategyId, newInstrument) {
+    const strategy = state.strategies.find(s => s.id === strategyId);
+    if (!strategy) {
+        alert("Strategy configuration not found.");
+        return;
+    }
+
+    strategy.instrument = newInstrument;
+
+    // Adjust default MIN_FIB_RANGE depending on selected instrument to prevent mismatches
+    let minFib = 3.0;
+    if (newInstrument.includes("EUR_USD")) minFib = 0.0030;
+    else if (newInstrument.includes("GBP_USD")) minFib = 0.0035;
+    else if (newInstrument.includes("USD_JPY")) minFib = 0.30;
+    else if (newInstrument.includes("XAU_USD")) minFib = 3.0;
+    else minFib = 0.0030;
+
+    strategy.min_fib_range = minFib;
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/strategies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(strategy)
+        });
+
+        if (!resp.ok) throw new Error("Failed to save updated strategy configuration.");
+
+        await fetchStrategies();
+        await fetchBotStatuses();
+    } catch (err) {
+        alert("Error changing instrument: " + err.message);
+        console.error(err);
+    }
+}
+
 
