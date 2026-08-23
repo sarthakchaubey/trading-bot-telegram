@@ -98,6 +98,15 @@ class BotWorker:
         self.thread.start()
         self.log("Worker daemon thread started.")
 
+        # Send Telegram startup notification if enabled
+        if self.config.get("telegram_enabled", False):
+            try:
+                import telegram_notifier
+                msg = f"🤖 <b>[Bot Dashboard: {self.config['name']}]</b>\n🟢 Bot is now <b>ONLINE</b> and watching <code>{self.config['instrument']} ({self.config['granularity']})</code>."
+                telegram_notifier.send_message(msg)
+            except Exception as telegram_err:
+                self.log(f"Telegram startup notification error: {telegram_err}")
+
     def stop(self):
         if not self.running:
             return
@@ -106,6 +115,15 @@ class BotWorker:
         if self.thread:
             self.thread.join(timeout=2)
         self.log("Worker stopped.")
+
+        # Send Telegram stop notification if enabled
+        if self.config.get("telegram_enabled", False):
+            try:
+                import telegram_notifier
+                msg = f"🤖 <b>[Bot Dashboard: {self.config['name']}]</b>\n🔴 Bot is now <b>OFFLINE</b> (stopped)."
+                telegram_notifier.send_message(msg)
+            except Exception as telegram_err:
+                self.log(f"Telegram stop notification error: {telegram_err}")
 
     def _run_loop(self):
         class ConfigMock:
