@@ -5,7 +5,7 @@ import threading
 import traceback
 import collections
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -313,6 +313,8 @@ class BacktestRequestSchema(BaseModel):
     strategy_id: str
     count: int = 500
     force_refresh: bool = False
+    instrument: Optional[str] = None
+    granularity: Optional[str] = None
 
 class AnalyzeRequestSchema(BaseModel):
     instrument: str
@@ -537,6 +539,27 @@ def run_backtest(req: BacktestRequestSchema):
     strat = next((s for s in strategies if s["id"] == req.strategy_id), None)
     if not strat:
         raise HTTPException(status_code=404, detail="Strategy config not found.")
+
+    # Apply instrument and granularity overrides if provided
+    if req.instrument:
+        new_inst = req.instrument
+        if new_inst != strat.get("instrument"):
+            min_fib = 3.0
+            if "EUR_USD" in new_inst:
+                min_fib = 0.0030
+            elif "GBP_USD" in new_inst:
+                min_fib = 0.0035
+            elif "USD_JPY" in new_inst:
+                min_fib = 0.30
+            elif "XAU_USD" in new_inst:
+                min_fib = 3.0
+            else:
+                min_fib = 0.0030
+            strat["min_fib_range"] = min_fib
+        strat["instrument"] = new_inst
+
+    if req.granularity:
+        strat["granularity"] = req.granularity
 
     class ConfigMock:
         pass
