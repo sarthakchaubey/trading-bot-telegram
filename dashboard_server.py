@@ -79,6 +79,7 @@ class BotWorker:
     def __init__(self, strategy_config: Dict[str, Any]):
         self.config = strategy_config
         self.running = False
+        self.stop_event = threading.Event()
         self.thread = None
         self.logs = collections.deque(maxlen=150)
         self.last_run = None
@@ -95,36 +96,42 @@ class BotWorker:
         if self.running:
             return
         self.running = True
+        self.stop_event.clear()
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         self.log("Worker daemon thread started.")
 
-        # Send Telegram startup notification if enabled
+        # Send Telegram startup notification if enabled (asynchronously)
         if self.config.get("telegram_enabled", False):
-            try:
-                import telegram_notifier
-                msg = f"🤖 <b>[Bot Dashboard: {self.config['name']}]</b>\n🟢 Bot is now <b>ONLINE</b> and watching <code>{self.config['instrument']} ({self.config['granularity']})</code>."
-                telegram_notifier.send_message(msg)
-            except Exception as telegram_err:
-                self.log(f"Telegram startup notification error: {telegram_err}")
+            def send_telegram_async():
+                try:
+                    import telegram_notifier
+                    msg = f"🤖 <b>[Bot Dashboard: {self.config['name']}]</b>\n🟢 Bot is now <b>ONLINE</b> and watching <code>{self.config['instrument']} ({self.config['granularity']})</code>."
+                    telegram_notifier.send_message(msg)
+                except Exception as telegram_err:
+                    self.log(f"Telegram startup notification error: {telegram_err}")
+            threading.Thread(target=send_telegram_async, daemon=True).start()
 
     def stop(self):
         if not self.running:
             return
         self.running = False
+        self.stop_event.set()
         self.log("Worker stop requested. Joining thread...")
         if self.thread:
             self.thread.join(timeout=2)
         self.log("Worker stopped.")
 
-        # Send Telegram stop notification if enabled
+        # Send Telegram stop notification if enabled (asynchronously)
         if self.config.get("telegram_enabled", False):
-            try:
-                import telegram_notifier
-                msg = f"🤖 <b>[Bot Dashboard: {self.config['name']}]</b>\n🔴 Bot is now <b>OFFLINE</b> (stopped)."
-                telegram_notifier.send_message(msg)
-            except Exception as telegram_err:
-                self.log(f"Telegram stop notification error: {telegram_err}")
+            def send_telegram_async():
+                try:
+                    import telegram_notifier
+                    msg = f"🤖 <b>[Bot Dashboard: {self.config['name']}]</b>\n🔴 Bot is now <b>OFFLINE</b> (stopped)."
+                    telegram_notifier.send_message(msg)
+                except Exception as telegram_err:
+                    self.log(f"Telegram stop notification error: {telegram_err}")
+            threading.Thread(target=send_telegram_async, daemon=True).start()
 
     def _run_loop(self):
         class ConfigMock:
@@ -146,14 +153,16 @@ class BotWorker:
         cfg_mock.CANDLE_HISTORY_COUNT = self.config.get("candle_history_count", 300)
 
         # Stagger startup based on its list position to avoid Twelve Data rate-limiting spikes
-        time.sleep(2)
+        if self.stop_event.wait(timeout=2):
+            return
         self.log(f"Worker initialized. Priming candle history...")
 
         try:
             df = twelvedata_feed.get_candles(
                 self.config["instrument"],
                 count=cfg_mock.CANDLE_HISTORY_COUNT,
-                granularity=self.config["granularity"]
+                granularity=self.config["granularity"],
+                stop_event=self.stop_event
             )
             # Route to correct strategy execution logic
             strat_type = self.config.get("strategy_type", "Fibonacci")
@@ -172,13 +181,14 @@ class BotWorker:
         except Exception as e:
             self.log(f"Priming failed: {str(e)}")
 
-        while self.running:
+        while not self.stop_event.is_set():
             self.last_run = datetime.now()
             try:
                 df = twelvedata_feed.get_candles(
                     self.config["instrument"],
                     count=cfg_mock.CANDLE_HISTORY_COUNT,
-                    granularity=self.config["granularity"]
+                    granularity=self.config["granularity"],
+                    stop_event=self.stop_event
                 )
                 
                 if df.empty:
@@ -232,11 +242,9 @@ class BotWorker:
                 self.error_count += 1
                 self.log(f"Execution Error (Count: {self.error_count}): {traceback.format_exc()}")
                 
-            # Staggered sleep loop (check self.running every 1s for snappy termination)
-            for _ in range(60):
-                if not self.running:
-                    break
-                time.sleep(1)
+            # Sleep for 60 seconds or until stop_event is set
+            if self.stop_event.wait(timeout=60):
+                break
 
 # Active running worker threads dictionary
 workers: Dict[str, BotWorker] = {}

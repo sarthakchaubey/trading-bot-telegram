@@ -33,7 +33,7 @@ def map_granularity(granularity: str) -> str:
     }
     return mapping.get(granularity, granularity)
 
-def get_candles(instrument: str, count: int = None, granularity: str = None, force_refresh: bool = False) -> pd.DataFrame:
+def get_candles(instrument: str, count: int = None, granularity: str = None, force_refresh: bool = False, stop_event=None) -> pd.DataFrame:
     """
     Returns a DataFrame of *completed* authentic candles from Twelve Data, oldest -> newest,
     columns: time (tz-aware UTC), open, high, low, close, volume.
@@ -120,7 +120,10 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
                 last_error_msg = message
                 if "limit" in message.lower() or "speed" in message.lower() or "many requests" in message.lower():
                     print(f"[Twelve Data] Rate limit: {message}. Retrying in {retry_delay}s... (Attempt {attempt+1}/{max_retries})")
-                    time.sleep(retry_delay)
+                    if stop_event and stop_event.wait(timeout=retry_delay):
+                        break
+                    if not stop_event:
+                        time.sleep(retry_delay)
                     continue
                 else:
                     raise RuntimeError(f"Twelve Data API error: {message}")
@@ -134,7 +137,10 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
             last_error_msg = str(e)
             if e.response is not None and e.response.status_code == 429:
                 print(f"[Twelve Data] HTTP 429 Rate limit hit. Retrying in {retry_delay}s... (Attempt {attempt+1}/{max_retries})")
-                time.sleep(retry_delay)
+                if stop_event and stop_event.wait(timeout=retry_delay):
+                    break
+                if not stop_event:
+                    time.sleep(retry_delay)
                 continue
             print(f"[Twelve Data] HTTP Error: {e}")
             break
