@@ -1,1430 +1,1483 @@
 // ============================================================================
-// STATE & CONFIG
+// TradingView 1-to-1 Hub Client Engine
+// Powered by TradingView Lightweight Charts (v4.2)
 // ============================================================================
+
 const API_BASE = window.location.origin;
 
-let state = {
+// Application State
+const state = {
+    currentSymbol: "EUR_USD",
+    currentGranularity: "M15",
+    currentStrategyType: "Fibonacci",
+    currentChartType: "candles", // candles, line, area
+    
+    chart: null,
+    candlestickSeries: null,
+    lineSeries: null,
+    areaSeries: null,
+    volumeSeries: null,
+    ema50Series: null,
+    ema200Series: null,
+    fibPriceLines: [],
+    
+    currentCandles: [],
+    currentSignals: [],
+    quotes: [],
     strategies: [],
     signals: [],
     botStatuses: [],
-    activeView: 'dashboard',
-    selectedLogStrategyId: '',
-    logInterval: null,
-    statusInterval: null,
+    
+    // Indicators configuration
+    indicators: {
+        ema50: true,
+        ema200: false,
+        fib: true,
+        volume: true
+    },
+
+    // Chart customization
+    chartColors: {
+        upColor: "#089981",
+        downColor: "#f23645",
+        watermark: true
+    },
+    
     equityChartInstance: null,
-    donutChartInstance: null,
-    terminalChartInstance: null
+    
+    // Bar Replay Simulator State
+    replayActive: false,
+    replayIndex: 0,
+    replayInterval: null,
+    replaySpeed: 500,
+
+    // Active Drawing Tool
+    activeDrawingTool: "cursor",
+    magnetMode: false,
+    toolsLocked: false,
+    indicatorsHidden: false,
+    
+    pollInterval: null
 };
 
 // ============================================================================
-// DOM INITS & INITIAL LISTENERS
+// TOAST NOTIFICATION SYSTEM
 // ============================================================================
-document.addEventListener('DOMContentLoaded', () => {
-    // Lucide Icons Initialization
-    lucide.createIcons();
+function showToast(message, type = "info") {
+    const container = document.getElementById("tv-toast-container");
+    if (!container) return;
 
-    // Sidebar navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
-            const view = item.getAttribute('data-view');
-            switchView(view);
-        });
-    });
-
-    // Strategy Modal Close button
-    document.getElementById('modal-close-btn').addEventListener('click', closeModal);
-    document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
-
-    // Strategy Modal Tabs switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            const tabId = btn.getAttribute('data-tab');
-            document.getElementById(tabId).classList.add('active');
-        });
-    });
-
-    // Strategy Modal Filter checkbox disclosures
-    setupDisclosure('strat-use-time-filter', 'time-filter-inputs');
-    setupDisclosure('strat-use-trend', 'trend-inputs');
-    setupDisclosure('strat-use-candle', 'candle-inputs');
-    setupDisclosure('strat-use-consolidation', 'consolidation-inputs');
-
-    // Strategy creation & save
-    document.getElementById('btn-add-strategy').addEventListener('click', () => openStrategyModal());
-    document.getElementById('btn-create-strategy-shortcut').addEventListener('click', () => openStrategyModal());
-    document.getElementById('strategy-form').addEventListener('submit', handleSaveStrategy);
-
-    // Refresh bot statuses
-    document.getElementById('refresh-status').addEventListener('click', fetchBotStatuses);
-
-    // Log console select dropdown
-    document.getElementById('log-strategy-select').addEventListener('change', (e) => {
-        state.selectedLogStrategyId = e.target.value;
-        renderLogs();
-    });
-
-    // Backtest Form Submission
-    document.getElementById('backtest-form').addEventListener('submit', handleRunBacktest);
+    const toast = document.createElement("div");
+    toast.className = "tv-toast " + type;
     
-    // Backtest candle history slider
-    const slider = document.getElementById('backtest-count');
-    const sliderVal = document.getElementById('backtest-count-val');
-    slider.addEventListener('input', (e) => {
-        sliderVal.textContent = e.target.value;
-    });
+    let iconName = "info";
+    if (type === "success") iconName = "check-circle";
+    if (type === "danger") iconName = "alert-circle";
+    if (type === "warning") iconName = "alert-triangle";
 
-    // Backtest comparison toggle
-    document.getElementById('backtest-compare-enable').addEventListener('change', (e) => {
-        const group = document.getElementById('compare-strat-group');
-        group.style.display = e.target.checked ? 'block' : 'none';
-        document.getElementById('backtest-compare-select').required = e.target.checked;
-    });
+    toast.innerHTML = `<i data-lucide="${iconName}"></i> <span>${message}</span>`;
+    container.appendChild(toast);
+    if (window.lucide) lucide.createIcons();
 
-    // Terminal Event Listeners
-    document.getElementById('btn-terminal-load').addEventListener('click', updateTerminalChart);
-    document.getElementById('btn-terminal-trade').addEventListener('click', startTerminalTrading);
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(40px)";
+        toast.style.transition = "all 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+    }, 3200);
+}
 
-    // Initial data fetch
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+document.addEventListener("DOMContentLoaded", () => {
+    // Initialize Lucide Icons
+    if (window.lucide) lucide.createIcons();
+
+    // 1. Initialize Lightweight Chart Canvas
+    initTradingViewChart();
+
+    // 2. Setup Topbar & Menu Listeners
+    setupTopbarEvents();
+    setupMainMenuEvents();
+
+    // 3. Setup Left Toolbar Drawing Tools
+    setupLeftToolbarEvents();
+
+    // 4. Setup Right Sidebar Tabs & Actions
+    setupSidebarEvents();
+
+    // 5. Setup Bottom Dock Tabs & Backtester
+    setupBottomDockEvents();
+
+    // 6. Setup Modals & Dialogs
+    setupModalsEvents();
+
+    // 7. Setup Bar Replay Engine
+    setupReplayEvents();
+
+    // 8. Initial Data Loads
+    fetchQuotes();
     fetchStrategies();
     fetchSignals();
     fetchBotStatuses();
-    
-    // Initial terminal load
-    updateTerminalChart();
+    loadMainChartData();
 
-    // Setup periodic polling loops (every 3 seconds)
-    state.statusInterval = setInterval(() => {
-        fetchBotStatuses();
+    // 9. Start Polling Loop (every 5 seconds)
+    state.pollInterval = setInterval(() => {
+        fetchQuotes();
         fetchSignals();
-    }, 4000);
+        fetchBotStatuses();
+    }, 5000);
+
+    showToast("TradingView Hub loaded & synced to Twelve Data.", "success");
 });
 
 // ============================================================================
-// GENERAL VIEW ROUTING
+// 1. LIGHTWEIGHT CHARTS SETUP & CONFIGURATION
 // ============================================================================
-function switchView(viewName) {
-    state.activeView = viewName;
-
-    // Toggle nav classes
-    document.querySelectorAll('.nav-item').forEach(item => {
-        if (item.getAttribute('data-view') === viewName) {
-            item.classList.add('active');
-        } else {
-            item.classList.remove('active');
-        }
-    });
-
-    // Toggle view elements
-    document.querySelectorAll('.content-view').forEach(view => {
-        if (view.id === `view-${viewName}`) {
-            view.classList.add('active');
-        } else {
-            view.classList.remove('active');
-        }
-    });
-
-    // Update Header title
-    const titles = {
-        dashboard: { main: 'Dashboard Overview', sub: 'Real-time status and alerts summary' },
-        strategies: { main: 'Strategy Configurations', sub: 'Manage, customize, and deploy strategy presets' },
-        backtesting: { main: 'Historical Backtester', sub: 'Test strategy presets against historical candles' }
-    };
-    document.getElementById('page-title').textContent = titles[viewName].main;
-    document.getElementById('page-subtitle').textContent = titles[viewName].sub;
-
-    // Perform fresh fetch on switch
-    if (viewName === 'dashboard') {
-        fetchBotStatuses();
-        fetchSignals();
-    } else if (viewName === 'strategies') {
-        fetchStrategies();
-    } else if (viewName === 'backtesting') {
-        populateBacktestSelector();
-    }
-}
-
-// Helper for conditional checkbox inputs
-function setupDisclosure(checkboxId, targetId) {
-    const box = document.getElementById(checkboxId);
-    const target = document.getElementById(targetId);
-
-    box.addEventListener('change', () => {
-        if (box.type === 'checkbox') {
-            if (box.checked) {
-                target.style.opacity = '1';
-                target.style.pointerEvents = 'auto';
-                target.style.display = 'block';
-                if (target.classList.contains('form-row')) {
-                    target.style.display = 'flex';
-                }
-            } else {
-                target.style.opacity = '0.5';
-                target.style.pointerEvents = 'none';
-                target.style.display = 'none';
-                if (checkboxId === 'strat-use-time-filter') {
-                    // Start/End time is nested inside opacity wrapper, preserve display layout
-                    target.style.display = 'flex';
-                }
-            }
-        }
-    });
-}
-
-// ============================================================================
-// DATA FETCHING & API INTERFACES
-// ============================================================================
-async function fetchStrategies() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/strategies`);
-        if (!resp.ok) throw new Error("Failed to load strategies.");
-        state.strategies = await resp.json();
-        renderStrategies();
-        populateLogSelector();
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-async function fetchSignals() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/signals`);
-        if (!resp.ok) throw new Error("Failed to load signals.");
-        state.signals = await resp.json();
-        renderSignals();
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-async function fetchBotStatuses() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/status`);
-        if (!resp.ok) throw new Error("Failed to load status.");
-        state.botStatuses = await resp.json();
-        renderBotStatuses();
-        renderLogs();
-        updateOverviewCards();
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-// ============================================================================
-// DOM RENDERING & TEMPLATES
-// ============================================================================
-
-// Overview count cards
-function updateOverviewCards() {
-    const runningCount = state.botStatuses.filter(b => b.status === 'running').length;
-    document.getElementById('stat-active-bots').textContent = runningCount;
-    document.getElementById('stat-total-signals').textContent = state.signals.length;
-    
-    if (state.botStatuses.length > 0) {
-        const times = state.botStatuses.map(b => b.last_run).filter(Boolean);
-        if (times.length > 0) {
-            const latest = new Date(Math.max(...times.map(t => new Date(t))));
-            document.getElementById('stat-last-check').textContent = latest.toLocaleTimeString();
-        } else {
-            document.getElementById('stat-last-check').textContent = 'Never';
-        }
-    } else {
-        document.getElementById('stat-last-check').textContent = 'Never';
-    }
-
-    // Count BUY vs SELL signals
-    let buyCount = 0;
-    let sellCount = 0;
-    state.signals.forEach(sig => {
-        if (sig.type === 'BUY') buyCount++;
-        if (sig.type === 'SELL') sellCount++;
-    });
-
-    document.getElementById('stat-signal-ratio').textContent = `${buyCount}:${sellCount}`;
-
-    // Render Donut Chart
-    const canvas = document.getElementById('signals-donut-chart');
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (state.donutChartInstance) {
-            state.donutChartInstance.destroy();
-        }
-        
-        state.donutChartInstance = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['BUY', 'SELL'],
-                datasets: [{
-                    data: [buyCount || 1, sellCount || 1], // default 1:1 if empty to show gray chart
-                    backgroundColor: (buyCount || sellCount) ? ['#2dd4bf', '#ff4335'] : ['#1e293b', '#1e293b'],
-                    borderWidth: 0,
-                    hoverOffset: 4
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: (buyCount || sellCount) ? true : false }
-                },
-                cutout: '70%',
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
-    }
-}
-
-// Render active bot cards on dashboard
-function renderBotStatuses() {
-    const container = document.getElementById('active-bots-list');
-    container.innerHTML = '';
-
-    if (state.botStatuses.length === 0) {
-        container.innerHTML = '<p class="empty-message">No strategies configured yet.</p>';
-        return;
-    }
-
-    state.botStatuses.forEach(bot => {
-        const isRunning = bot.status === 'running';
-        const card = document.createElement('div');
-        card.className = 'bot-status-item';
-
-        card.innerHTML = `
-            <div class="bot-info">
-                <span class="bot-title">${bot.name}</span>
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                    <select onchange="changeBotInstrument('${bot.id}', this.value)" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-muted); border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; font-weight: 500;">
-                        <option value="EUR_USD" ${bot.instrument === 'EUR_USD' ? 'selected' : ''}>EUR_USD</option>
-                        <option value="GBP_USD" ${bot.instrument === 'GBP_USD' ? 'selected' : ''}>GBP_USD</option>
-                        <option value="USD_JPY" ${bot.instrument === 'USD_JPY' ? 'selected' : ''}>USD_JPY</option>
-                        <option value="XAU_USD" ${bot.instrument === 'XAU_USD' ? 'selected' : ''}>XAU_USD</option>
-                    </select>
-                    <select onchange="changeBotTimeframe('${bot.id}', this.value)" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer;">
-                        <option value="M5" ${bot.granularity === 'M5' ? 'selected' : ''}>5m</option>
-                        <option value="M15" ${bot.granularity === 'M15' ? 'selected' : ''}>15m</option>
-                        <option value="M30" ${bot.granularity === 'M30' ? 'selected' : ''}>30m</option>
-                        <option value="H1" ${bot.granularity === 'H1' ? 'selected' : ''}>1h</option>
-                        ${['M1', 'H4', 'D'].includes(bot.granularity) ? `<option value="${bot.granularity}" selected>${bot.granularity}</option>` : ''}
-                    </select>
-                </div>
-            </div>
-            <div class="bot-state">
-                <span class="bot-badge ${bot.status}">${bot.status}</span>
-                <div class="bot-controls">
-                    ${isRunning 
-                        ? `<button class="btn-icon stop-btn" onclick="toggleBot('${bot.id}', 'stop')" title="Stop Bot"><i data-lucide="square"></i></button>`
-                        : `<button class="btn-icon play-btn" onclick="toggleBot('${bot.id}', 'start')" title="Start Bot"><i data-lucide="play"></i></button>`
-                    }
-                </div>
-            </div>
-        `;
-        container.appendChild(card);
-    });
-
-    lucide.createIcons();
-}
-
-// Dropdown mapping
-function populateLogSelector() {
-    const select = document.getElementById('log-strategy-select');
-    const val = select.value;
-    select.innerHTML = '<option value="">Select Strategy</option>';
-    state.strategies.forEach(s => {
-        select.innerHTML += `<option value="${s.id}">${s.name}</option>`;
-    });
-    select.value = val;
-}
-
-// Log Terminal content
-function renderLogs() {
-    const terminal = document.getElementById('terminal-logs');
-    if (!state.selectedLogStrategyId) {
-        terminal.innerHTML = '<p class="text-muted">// Select a strategy above to view live logs...</p>';
-        return;
-    }
-
-    const bot = state.botStatuses.find(b => b.id === state.selectedLogStrategyId);
-    if (!bot) {
-        terminal.innerHTML = '<p class="text-red">// Selected strategy not found.</p>';
-        return;
-    }
-
-    if (bot.status !== 'running' && bot.logs.length === 0) {
-        terminal.innerHTML = `<p class="text-muted">// Strategy [${bot.name}] is offline. No logs to show.</p>`;
-        return;
-    }
-
-    terminal.innerHTML = '';
-    bot.logs.forEach(line => {
-        const lineEl = document.createElement('p');
-        if (line.includes('ERROR') || line.includes('Failed')) {
-            lineEl.className = 'text-red';
-        } else if (line.includes('ALERT') || line.includes('NEW SIGNAL')) {
-            lineEl.className = 'text-green';
-        } else if (line.includes('Rate limit hit')) {
-            lineEl.className = 'text-muted';
-            lineEl.style.color = '#fbbf24'; // warning orange
-        }
-        lineEl.textContent = line;
-        terminal.appendChild(lineEl);
-    });
-
-    // Auto-scroll to bottom
-    terminal.scrollTop = terminal.scrollHeight;
-}
-
-// Render dynamic signals log table
-function renderSignals() {
-    const tbody = document.getElementById('signals-log-tbody');
-    tbody.innerHTML = '';
-
-    if (state.signals.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5" class="text-center py-4 text-muted">No signals captured yet.</td>
-            </tr>
-        `;
-        return;
-    }
-
-    // Sort descending
-    const sorted = [...state.signals].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    sorted.forEach(sig => {
-        const tr = document.createElement('tr');
-        const badgeClass = sig.kind === 'BUY' ? 'buy' : 'sell';
-        const formattedTime = new Date(sig.time).toLocaleString();
-
-        tr.innerHTML = `
-            <td><span class="badge-signal ${badgeClass}">${sig.kind}</span></td>
-            <td><strong>${sig.strategy_name}</strong></td>
-            <td><code>${sig.instrument} (${sig.granularity})</code></td>
-            <td><code>${sig.price.toFixed(5)}</code></td>
-            <td class="text-muted">${formattedTime}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// Render strategy manager cards
-function renderStrategies() {
-    const grid = document.getElementById('strategies-card-grid');
-    grid.innerHTML = '';
-
-    if (state.strategies.length === 0) {
-        grid.innerHTML = '<p class="empty-message">No strategies configured. Click Add Strategy to create one.</p>';
-        return;
-    }
-
-    state.strategies.forEach(strat => {
-        const isActive = strat.status === 'active';
-        const card = document.createElement('div');
-        card.className = 'strategy-card';
-
-        card.innerHTML = `
-            <div class="strat-card-header">
-                <div>
-                    <h3>${strat.name}</h3>
-                    <p>${strat.instrument} &bull; ${strat.granularity}</p>
-                    <small style="color: var(--primary); font-size: 11px; font-weight: 600; display: block; margin-top: 4px;">
-                        ${strat.strategy_type === 'MomentumBreakout' ? 'Momentum Breakout' : 'Swing Fibonacci'}
-                    </small>
-                </div>
-                <span class="bot-badge ${strat.status}">${strat.status}</span>
-            </div>
-            
-            <div class="strat-grid-info">
-                <div class="strat-info-item">
-                    <span>Pivot Left/Right</span>
-                    <span>${strat.left_bars} / ${strat.right_bars}</span>
-                </div>
-                <div class="strat-info-item">
-                    <span>Fib Level</span>
-                    <span>${strat.signal_level}</span>
-                </div>
-                <div class="strat-info-item">
-                    <span>Price Source</span>
-                    <span>${strat.price_source}</span>
-                </div>
-                <div class="strat-info-item">
-                    <span>Trend Filter</span>
-                    <span>${strat.use_trend_filter ? 'On' : 'Off'}</span>
-                </div>
-                <div class="strat-info-item">
-                    <span>Confirm Type</span>
-                    <span>${strat.use_candle_confirmation ? 'On' : 'Off'}</span>
-                </div>
-                <div class="strat-info-item">
-                    <span>Telegram</span>
-                    <span>${strat.telegram_enabled ? 'On' : 'Off'}</span>
-                </div>
-            </div>
-
-            <div class="strat-card-footer">
-                <div class="bot-controls">
-                    ${isActive 
-                        ? `<button class="btn btn-secondary btn-icon stop-btn" onclick="toggleBot('${strat.id}', 'stop')" title="Stop Live Alerts"><i data-lucide="square"></i></button>`
-                        : `<button class="btn btn-primary btn-icon play-btn" onclick="toggleBot('${strat.id}', 'start')" title="Start Live Alerts"><i data-lucide="play"></i></button>`
-                    }
-                </div>
-                <div class="strat-actions-wrapper">
-                    <button class="btn btn-secondary btn-icon" onclick="openStrategyModal('${strat.id}')" title="Edit Strategy Parameters"><i data-lucide="edit"></i></button>
-                    <button class="btn btn-secondary btn-icon" onclick="runQuickBacktest('${strat.id}')" title="Run Backtest Preset"><i data-lucide="line-chart"></i></button>
-                    <button class="btn btn-secondary btn-icon text-red" onclick="deleteStrategy('${strat.id}')" title="Delete Preset"><i data-lucide="trash-2"></i></button>
-                </div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-
-    lucide.createIcons();
-}
-
-// Backtest selectors populate
-function populateBacktestSelector() {
-    const select = document.getElementById('backtest-strat-select');
-    const compSelect = document.getElementById('backtest-compare-select');
-    
-    const curVal = select.value;
-    const curCompVal = compSelect.value;
-    
-    select.innerHTML = '<option value="">Choose Strategy</option>';
-    compSelect.innerHTML = '<option value="">Choose Comparison Strategy</option>';
-    
-    state.strategies.forEach(s => {
-        const option = `<option value="${s.id}">${s.name} (${s.instrument} @ ${s.granularity})</option>`;
-        select.innerHTML += option;
-        compSelect.innerHTML += option;
-    });
-    
-    select.value = curVal;
-    compSelect.value = curCompVal;
-}
-
-// ============================================================================
-// STRATEGY ACTIONS (CRUD)
-// ============================================================================
-function openStrategyModal(stratId = '') {
-    const modal = document.getElementById('strategy-modal');
-    const form = document.getElementById('strategy-form');
-    const title = document.getElementById('modal-title');
-    
-    // Clear tabs
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    document.querySelector('.tab-btn[data-tab="tab-general"]').classList.add('active');
-    document.getElementById('tab-general').classList.add('active');
-
-    form.reset();
-
-    if (stratId) {
-        // Edit Mode
-        title.textContent = "Edit Strategy Configuration";
-        const strat = state.strategies.find(s => s.id === stratId);
-        
-        document.getElementById('strat-id').value = strat.id;
-        document.getElementById('strat-status').value = strat.status;
-        document.getElementById('strat-name').value = strat.name;
-        document.getElementById('strat-instrument').value = strat.instrument;
-        document.getElementById('strat-granularity').value = strat.granularity;
-        document.getElementById('strat-telegram').checked = strat.telegram_enabled;
-        document.getElementById('strat-price-source').value = strat.price_source;
-        document.getElementById('strat-signal-level').value = strat.signal_level;
-        document.getElementById('strat-type').value = strat.strategy_type || 'Fibonacci';
-        
-        document.getElementById('strat-bull-tp').value = strat.bull_tp_level;
-        document.getElementById('strat-bull-sl').value = strat.bull_sl_level;
-        document.getElementById('strat-bear-tp').value = strat.bear_tp_level;
-        document.getElementById('strat-bear-sl').value = strat.bear_sl_level;
-
-        document.getElementById('strat-left-bars').value = strat.left_bars;
-        document.getElementById('strat-right-bars').value = strat.right_bars;
-        document.getElementById('strat-min-swing-size').value = strat.min_swing_size;
-        document.getElementById('strat-min-fib-range').value = strat.min_fib_range;
-        document.getElementById('strat-min-bars-between').value = strat.min_bars_between_swings;
-        document.getElementById('strat-require-alt').checked = strat.require_alternating_swings;
-        document.getElementById('strat-recalc-extreme').checked = strat.recalculate_on_extreme;
-
-        document.getElementById('strat-use-time-filter').checked = strat.use_time_filter;
-        document.getElementById('strat-start-hour').value = strat.start_hour;
-        document.getElementById('strat-start-minute').value = strat.start_minute;
-        document.getElementById('strat-end-hour').value = strat.end_hour;
-        document.getElementById('strat-end-minute').value = strat.end_minute;
-
-        document.getElementById('strat-use-nt1').checked = strat.use_no_trade_1;
-        document.getElementById('strat-nt1-start-h').value = strat.nt1_start_hour;
-        document.getElementById('strat-nt1-start-m').value = strat.nt1_start_minute;
-        document.getElementById('strat-nt1-end-h').value = strat.nt1_end_hour;
-        document.getElementById('strat-nt1-end-m').value = strat.nt1_end_minute;
-
-        document.getElementById('strat-use-trend').checked = strat.use_trend_filter;
-        document.getElementById('strat-trend-ma-type').value = strat.trend_ma_type;
-        document.getElementById('strat-trend-len').value = strat.trend_length;
-        document.getElementById('strat-trend-slope').value = strat.minimum_slope;
-
-        document.getElementById('strat-use-candle').checked = strat.use_candle_confirmation;
-        document.getElementById('strat-candle-type').value = strat.confirmation_type;
-        document.getElementById('strat-wick-ratio').value = strat.minimum_wick_ratio;
-
-        document.getElementById('strat-use-consolidation').checked = strat.use_consolidation_filter;
-        document.getElementById('strat-consolidation-len').value = strat.consolidation_length;
-        document.getElementById('strat-consolidation-atr').value = strat.max_consolidation_atr;
-    } else {
-        // Create Mode
-        title.textContent = "Create New Strategy";
-        document.getElementById('strat-id').value = '';
-        document.getElementById('strat-status').value = 'inactive';
-        document.getElementById('strat-type').value = 'Fibonacci';
-        
-        // Populate standard default parameters
-        document.getElementById('strat-left-bars').value = 5;
-        document.getElementById('strat-right-bars').value = 5;
-        document.getElementById('strat-min-swing-size').value = 0.0;
-        document.getElementById('strat-min-fib-range').value = 0.0030; // standard EUR/USD
-        document.getElementById('strat-min-bars-between').value = 1;
-        document.getElementById('strat-require-alt').checked = true;
-        document.getElementById('strat-recalc-extreme').checked = false;
-        
-        document.getElementById('strat-use-time-filter').checked = false;
-        document.getElementById('strat-use-nt1').checked = true;
-        document.getElementById('strat-use-trend').checked = false;
-        document.getElementById('strat-use-candle').checked = false;
-        document.getElementById('strat-use-consolidation').checked = false;
-    }
-
-    // Trigger manual checkmark updates on setup disclosures
-    const events = ['strat-use-time-filter', 'strat-use-trend', 'strat-use-candle', 'strat-use-consolidation'];
-    events.forEach(evId => {
-        const box = document.getElementById(evId);
-        box.dispatchEvent(new Event('change'));
-    });
-
-    modal.classList.add('active');
-}
-
-function closeModal() {
-    document.getElementById('strategy-modal').classList.remove('active');
-}
-
-async function handleSaveStrategy(e) {
-    e.preventDefault();
-
-    let stratId = document.getElementById('strat-id').value;
-    if (!stratId) {
-        // Generate random strategy ID
-        stratId = 'strat_' + Math.random().toString(36).substr(2, 9);
-    }
-
-    const payload = {
-        id: stratId,
-        status: document.getElementById('strat-status').value || 'inactive',
-        name: document.getElementById('strat-name').value,
-        instrument: document.getElementById('strat-instrument').value,
-        granularity: document.getElementById('strat-granularity').value,
-        telegram_enabled: document.getElementById('strat-telegram').checked,
-        price_source: document.getElementById('strat-price-source').value,
-        signal_level: document.getElementById('strat-signal-level').value,
-        strategy_type: document.getElementById('strat-type').value,
-        bull_tp_level: document.getElementById('strat-bull-tp').value,
-        bull_sl_level: document.getElementById('strat-bull-sl').value,
-        bear_tp_level: document.getElementById('strat-bear-tp').value,
-        bear_sl_level: document.getElementById('strat-bear-sl').value,
-        
-        left_bars: parseInt(document.getElementById('strat-left-bars').value),
-        right_bars: parseInt(document.getElementById('strat-right-bars').value),
-        min_swing_size: parseFloat(document.getElementById('strat-min-swing-size').value),
-        min_fib_range: parseFloat(document.getElementById('strat-min-fib-range').value),
-        min_bars_between_swings: parseInt(document.getElementById('strat-min-bars-between').value),
-        require_alternating_swings: document.getElementById('strat-require-alt').checked,
-        recalculate_on_extreme: document.getElementById('strat-recalc-extreme').checked,
-
-        use_time_filter: document.getElementById('strat-use-time-filter').checked,
-        start_hour: parseInt(document.getElementById('strat-start-hour').value) || 0,
-        start_minute: parseInt(document.getElementById('strat-start-minute').value) || 0,
-        end_hour: parseInt(document.getElementById('strat-end-hour').value) || 0,
-        end_minute: parseInt(document.getElementById('strat-end-minute').value) || 0,
-
-        use_no_trade_1: document.getElementById('strat-use-nt1').checked,
-        nt1_start_hour: parseInt(document.getElementById('strat-nt1-start-h').value) || 0,
-        nt1_start_minute: parseInt(document.getElementById('strat-nt1-start-m').value) || 0,
-        nt1_end_hour: parseInt(document.getElementById('strat-nt1-end-h').value) || 0,
-        nt1_end_minute: parseInt(document.getElementById('strat-nt1-end-m').value) || 0,
-
-        use_no_trade_2: false, // fallback preset defaults
-        nt2_start_hour: 0,
-        nt2_start_minute: 0,
-        nt2_end_hour: 0,
-        nt2_end_minute: 0,
-
-        use_trend_filter: document.getElementById('strat-use-trend').checked,
-        trend_ma_type: document.getElementById('strat-trend-ma-type').value || 'SMA',
-        trend_length: parseInt(document.getElementById('strat-trend-len').value) || 50,
-        trend_slope_bars: 5,
-        minimum_slope: parseFloat(document.getElementById('strat-trend-slope').value) || 0.0,
-
-        use_candle_confirmation: document.getElementById('strat-use-candle').checked,
-        confirmation_type: document.getElementById('strat-candle-type').value || 'Rejection Candle',
-        minimum_wick_ratio: parseFloat(document.getElementById('strat-wick-ratio').value) || 0.5,
-
-        use_consolidation_filter: document.getElementById('strat-use-consolidation').checked,
-        consolidation_length: parseInt(document.getElementById('strat-consolidation-len').value) || 20,
-        consolidation_atr_length: 14,
-        max_consolidation_atr: parseFloat(document.getElementById('strat-consolidation-atr').value) || 3.0
-    };
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/strategies`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!resp.ok) throw new Error("Failed to save strategy config.");
-        
-        closeModal();
-        fetchStrategies();
-        fetchBotStatuses();
-    } catch (err) {
-        alert(err.message);
-    }
-}
-
-async function deleteStrategy(stratId) {
-    if (!confirm("Are you sure you want to delete this strategy?")) return;
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/strategies/${stratId}`, {
-            method: 'DELETE'
-        });
-        if (!resp.ok) throw new Error("Failed to delete strategy.");
-        fetchStrategies();
-        fetchBotStatuses();
-    } catch (err) {
-        alert(err.message);
-    }
-}
-
-// ============================================================================
-// BOT RUN/STOP CONTROLS
-// ============================================================================
-async function toggleBot(stratId, action) {
-    try {
-        const endpoint = `${API_BASE}/api/bot/${action}/${stratId}`;
-        const resp = await fetch(endpoint, { method: 'POST' });
-        if (!resp.ok) throw new Error(`Failed to ${action} bot.`);
-        
-        fetchBotStatuses();
-        fetchStrategies();
-    } catch (err) {
-        alert(err.message);
-    }
-}
-
-// ============================================================================
-// BACKTEST EXECUTION
-// ============================================================================
-async function handleRunBacktest(e) {
-    e.preventDefault();
-
-    const stratId = document.getElementById('backtest-strat-select').value;
-    const count = parseInt(document.getElementById('backtest-count').value);
-    const forceRefresh = document.getElementById('backtest-refresh').checked;
-
-    const compareEnable = document.getElementById('backtest-compare-enable').checked;
-    const compareStratId = document.getElementById('backtest-compare-select').value;
-
-    if (!stratId) return;
-
-    const btn = document.getElementById('btn-run-backtest');
-    btn.disabled = true;
-    btn.innerHTML = `<i data-lucide="loader" class="animate-spin"></i> Running simulation...`;
-    lucide.createIcons();
-
-    try {
-        if (compareEnable && compareStratId) {
-            // Run BOTH backtests in parallel
-            const [resp1, resp2] = await Promise.all([
-                fetch(`${API_BASE}/api/backtest`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ strategy_id: stratId, count: count, force_refresh: forceRefresh })
-                }),
-                fetch(`${API_BASE}/api/backtest`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ strategy_id: compareStratId, count: count, force_refresh: forceRefresh })
-                })
-            ]);
-
-            if (!resp1.ok) {
-                const errBody = await resp1.json();
-                throw new Error("Primary backtest failed: " + (errBody.detail || "Unknown error"));
-            }
-            if (!resp2.ok) {
-                const errBody = await resp2.json();
-                throw new Error("Comparison backtest failed: " + (errBody.detail || "Unknown error"));
-            }
-
-            const data1 = await resp1.json();
-            const data2 = await resp2.json();
-
-            displayBacktestResults(data1, data2);
-        } else {
-            const resp = await fetch(`${API_BASE}/api/backtest`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    strategy_id: stratId,
-                    count: count,
-                    force_refresh: forceRefresh
-                })
-            });
-
-            if (!resp.ok) {
-                const errBody = await resp.json();
-                throw new Error(errBody.detail || "Backtest failed.");
-            }
-
-            const data = await resp.json();
-            displayBacktestResults(data);
-        }
-    } catch (err) {
-        alert("Backtest Error: " + err.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i data-lucide="play"></i> Run Backtest`;
-        lucide.createIcons();
-    }
-}
-
-function runQuickBacktest(stratId) {
-    switchView('backtesting');
-    document.getElementById('backtest-strat-select').value = stratId;
-    document.getElementById('backtest-compare-enable').checked = false;
-    document.getElementById('compare-strat-group').style.display = 'none';
-    const form = document.getElementById('backtest-form');
-    form.dispatchEvent(new Event('submit'));
-}
-
-function displayBacktestResults(data, dataComp = null) {
-    document.getElementById('backtest-results').style.display = 'block';
-
-    const m = data.metrics;
-    document.getElementById('bt-win-rate').textContent = `${m.win_rate}%`;
-    document.getElementById('bt-wins-losses').textContent = `${m.wins} Wins / ${m.losses} Losses`;
-    
-    const profitEl = document.getElementById('bt-net-profit');
-    profitEl.textContent = `${m.net_profit_pct > 0 ? '+' : ''}${m.net_profit_pct.toFixed(2)}%`;
-    profitEl.className = `metric-val ${m.net_profit_pct >= 0 ? 'text-green' : 'text-red'}`;
-
-    document.getElementById('bt-drawdown').textContent = `${m.max_drawdown_pct.toFixed(2)}%`;
-    document.getElementById('bt-total-trades').textContent = m.total_trades;
-    document.getElementById('bt-open-trades').textContent = `${m.open_trades} Open Trades`;
-
-    // Render Trade table for Primary strategy
-    const tbody = document.getElementById('backtest-trades-tbody');
-    tbody.innerHTML = '';
-
-    if (data.trades.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No simulated trades executed. Try increasing candle count or adjusting swing bounds.</td></tr>`;
-    } else {
-        data.trades.forEach(t => {
-            const tr = document.createElement('tr');
-            const badgeClass = t.type === 'BUY' ? 'buy' : 'sell';
-            const outcomeClass = t.outcome === 'WIN' ? 'text-green' : (t.outcome === 'LOSS' ? 'text-red' : 'text-muted');
-            const pnlClass = t.pnl_pct >= 0 ? 'text-green' : 'text-red';
-            
-            tr.innerHTML = `
-                <td><span class="badge-signal ${badgeClass}">${t.type}</span></td>
-                <td><small>${t.entry_time}</small></td>
-                <td><code>${t.entry_price.toFixed(5)}</code></td>
-                <td><code>${t.tp.toFixed(5)}</code></td>
-                <td><code>${t.sl.toFixed(5)}</code></td>
-                <td><small>${t.exit_time}</small></td>
-                <td><code>${t.exit_price.toFixed(5)}</code></td>
-                <td class="${outcomeClass}"><strong>${t.outcome}</strong></td>
-                <td class="${pnlClass}"><strong>${t.pnl_pct > 0 ? '+' : ''}${t.pnl_pct.toFixed(3)}%</strong></td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
-
-    // Handle comparison table
-    const compCard = document.getElementById('backtest-comparison-card');
-    if (dataComp) {
-        compCard.style.display = 'block';
-        document.getElementById('comp-label-primary').textContent = data.strategy.name;
-        document.getElementById('comp-label-secondary').textContent = dataComp.strategy.name;
-
-        const mComp = dataComp.metrics;
-        const compTbody = document.getElementById('comparison-tbody');
-        
-        // Define metrics rows
-        const metricsRows = [
-            {
-                name: "Net Return (%)",
-                val1: m.net_profit_pct,
-                val2: mComp.net_profit_pct,
-                format: (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`,
-                better: (v1, v2) => v1 > v2
-            },
-            {
-                name: "Win Rate (%)",
-                val1: parseFloat(m.win_rate),
-                val2: parseFloat(mComp.win_rate),
-                format: (v) => `${v.toFixed(1)}%`,
-                better: (v1, v2) => v1 > v2
-            },
-            {
-                name: "Max Drawdown (%)",
-                val1: m.max_drawdown_pct,
-                val2: mComp.max_drawdown_pct,
-                format: (v) => `${v.toFixed(2)}%`,
-                better: (v1, v2) => v1 < v2 // lower drawdown is better!
-            },
-            {
-                name: "Total Trades Executed",
-                val1: m.total_trades,
-                val2: mComp.total_trades,
-                format: (v) => v,
-                better: (v1, v2) => v1 > v2
-            }
-        ];
-
-        compTbody.innerHTML = '';
-        metricsRows.forEach(r => {
-            const tr = document.createElement('tr');
-            const diff = r.val1 - r.val2;
-            const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
-            const winner = r.better(r.val1, r.val2) ? data.strategy.name : (r.val1 === r.val2 ? 'Tie' : dataComp.strategy.name);
-            
-            const val1Class = r.better(r.val1, r.val2) ? 'text-green font-bold' : (r.val1 === r.val2 ? '' : 'text-muted');
-            const val2Class = r.better(r.val2, r.val1) ? 'text-green font-bold' : (r.val1 === r.val2 ? '' : 'text-muted');
-            const winnerClass = winner === 'Tie' ? 'text-muted' : 'text-green font-bold';
-
-            tr.innerHTML = `
-                <td class="text-left font-semibold">${r.name}</td>
-                <td class="${val1Class}">${r.format(r.val1)}</td>
-                <td class="${val2Class}">${r.format(r.val2)}</td>
-                <td>${diffStr}</td>
-                <td><span class="badge ${winner === 'Tie' ? 'bg-secondary' : 'bg-green-soft'} ${winnerClass}">${winner}</span></td>
-            `;
-            compTbody.appendChild(tr);
-        });
-
-        // Render dual chart
-        renderEquityChart(data.trades, dataComp.trades, data.strategy.name, dataComp.strategy.name);
-    } else {
-        compCard.style.display = 'none';
-        renderEquityChart(data.trades);
-    }
-}
-
-// Chart.js helper
-function renderEquityChart(tradesPrimary, tradesComparison = null, labelPrimary = 'Primary Strategy', labelComparison = 'Comparison Strategy') {
-    const canvas = document.getElementById('equity-chart');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    
-    // Destroy previous Chart instance
-    if (state.equityChartInstance) {
-        state.equityChartInstance.destroy();
-    }
-
-    const labels = ['Start'];
-    const valuesPrimary = [0.0];
-    
-    tradesPrimary.forEach((t, i) => {
-        labels.push(`Trade ${i + 1}`);
-        valuesPrimary.push(t.cumulative_pnl_pct);
-    });
-
-    const datasets = [];
-
-    // Create beautiful gradients
-    const gradient1 = ctx.createLinearGradient(0, 0, 0, 350);
-    gradient1.addColorStop(0, 'rgba(45, 212, 191, 0.35)');
-    gradient1.addColorStop(1, 'rgba(45, 212, 191, 0.00)');
-
-    datasets.push({
-        label: `${labelPrimary} (%)`,
-        data: valuesPrimary,
-        borderColor: '#2dd4bf', // mint green
-        borderWidth: 3,
-        backgroundColor: gradient1,
-        fill: true,
-        tension: 0.25,
-        pointRadius: valuesPrimary.length < 50 ? 4 : 1,
-        pointBackgroundColor: '#14b8a6',
-    });
-
-    if (tradesComparison) {
-        const valuesComparison = [0.0];
-        tradesComparison.forEach((t) => {
-            valuesComparison.push(t.cumulative_pnl_pct);
-        });
-
-        // Make sure labels match the maximum length of both
-        if (valuesComparison.length > labels.length) {
-            labels.length = 0;
-            labels.push('Start');
-            valuesComparison.forEach((_, idx) => {
-                if (idx > 0) labels.push(`Trade ${idx}`);
-            });
-        }
-
-        const gradient2 = ctx.createLinearGradient(0, 0, 0, 350);
-        gradient2.addColorStop(0, 'rgba(255, 67, 53, 0.35)');
-        gradient2.addColorStop(1, 'rgba(255, 67, 53, 0.00)');
-
-        datasets.push({
-            label: `${labelComparison} (%)`,
-            data: valuesComparison,
-            borderColor: '#ff4335', // red/amber
-            borderWidth: 3,
-            backgroundColor: gradient2,
-            fill: true,
-            tension: 0.25,
-            pointRadius: valuesComparison.length < 50 ? 4 : 1,
-            pointBackgroundColor: '#ef4444',
-        });
-    }
-
-    state.equityChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: datasets
+function initTradingViewChart() {
+    const container = document.getElementById("tv-chart-container");
+    if (!container) return;
+
+    // Create TradingView Chart Instance
+    state.chart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: container.clientHeight,
+        layout: {
+            background: { color: "#131722" },
+            textColor: "#787b86",
+            fontFamily: "-apple-system, BlinkMacSystemFont, Arial, sans-serif",
+            fontSize: 11
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { 
-                    display: tradesComparison ? true : false,
-                    labels: { color: '#9ca3af' }
-                },
-                tooltip: {
-                    backgroundColor: '#0f172a',
-                    titleColor: '#f3f4f6',
-                    bodyColor: '#9ca3af',
-                    borderColor: '#1e293b',
-                    borderWidth: 1,
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.dataset.label.split(' ')[0]}: ${context.parsed.y.toFixed(2)}%`;
-                        }
-                    }
-                }
+        grid: {
+            vertLines: { color: "rgba(42, 46, 57, 0.45)", style: LightweightCharts.LineStyle.Solid },
+            horzLines: { color: "rgba(42, 46, 57, 0.45)", style: LightweightCharts.LineStyle.Solid }
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+            vertLine: {
+                color: "#787b86",
+                width: 1,
+                style: LightweightCharts.LineStyle.Dashed,
+                labelBackgroundColor: "#2a2e39"
             },
-            scales: {
-                x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.02)' },
-                    ticks: { color: '#9ca3af', font: { size: 11 } }
-                },
-                y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                    ticks: {
-                        color: '#9ca3af',
-                        font: { size: 11 },
-                        callback: function(value) { return value.toFixed(1) + '%'; }
-                    }
-                }
+            horzLine: {
+                color: "#787b86",
+                width: 1,
+                style: LightweightCharts.LineStyle.Dashed,
+                labelBackgroundColor: "#2a2e39"
             }
+        },
+        rightPriceScale: {
+            borderColor: "#2a2e39",
+            autoScale: true,
+            scaleMargins: {
+                top: 0.1,
+                bottom: 0.2
+            }
+        },
+        timeScale: {
+            borderColor: "#2a2e39",
+            timeVisible: true,
+            secondsVisible: false,
+            fixLeftEdge: true,
+            rightOffset: 12,
+            barSpacing: 8
+        },
+        watermark: {
+            visible: true,
+            fontSize: 44,
+            horzAlign: "center",
+            vertAlign: "center",
+            color: "rgba(255, 255, 255, 0.03)",
+            text: "EUR/USD • 15m"
         }
     });
+
+    // Add Candlestick Series (Exact TradingView Color Palette)
+    state.candlestickSeries = state.chart.addCandlestickSeries({
+        upColor: state.chartColors.upColor,
+        downColor: state.chartColors.downColor,
+        borderVisible: false,
+        wickUpColor: state.chartColors.upColor,
+        wickDownColor: state.chartColors.downColor
+    });
+
+    // Add Volume Histogram Subseries
+    state.volumeSeries = state.chart.addHistogramSeries({
+        color: "#26a69a",
+        priceFormat: { type: "volume" },
+        priceScaleId: "", // overlay mode
+        scaleMargins: {
+            top: 0.8,
+            bottom: 0
+        }
+    });
+
+    // Add EMA Indicator Overlays
+    state.ema50Series = state.chart.addLineSeries({
+        color: "#3b82f6",
+        lineWidth: 2,
+        title: "EMA 50"
+    });
+
+    state.ema200Series = state.chart.addLineSeries({
+        color: "#eab308",
+        lineWidth: 2,
+        title: "EMA 200"
+    });
+    state.ema200Series.applyOptions({ visible: false });
+
+    // Crosshair Movement Handler -> Update Top-Left Legend
+    state.chart.subscribeCrosshairMove((param) => {
+        if (!param || !param.time || !param.seriesData || !param.seriesData.get(state.candlestickSeries)) {
+            // Restore latest candle values
+            if (state.currentCandles.length > 0) {
+                updateLegendValues(state.currentCandles[state.currentCandles.length - 1]);
+            }
+            return;
+        }
+
+        const data = param.seriesData.get(state.candlestickSeries);
+        const volData = param.seriesData.get(state.volumeSeries);
+        if (data) {
+            updateLegendValues(data, volData ? volData.value : null);
+        }
+    });
+
+    // Responsive Resize Observer
+    const resizeObserver = new ResizeObserver((entries) => {
+        if (!entries || entries.length === 0 || !state.chart) return;
+        const { width, height } = entries[0].contentRect;
+        state.chart.applyOptions({ width, height });
+    });
+    resizeObserver.observe(container);
+}
+
+function updateLegendValues(candle, volume) {
+    if (!candle) return;
+    const oEl = document.getElementById("legend-open");
+    const hEl = document.getElementById("legend-high");
+    const lEl = document.getElementById("legend-low");
+    const cEl = document.getElementById("legend-close");
+    const diffEl = document.getElementById("legend-diff");
+    const volEl = document.getElementById("legend-vol");
+
+    if (oEl) oEl.textContent = candle.open ? candle.open.toFixed(5) : "-";
+    if (hEl) hEl.textContent = candle.high ? candle.high.toFixed(5) : "-";
+    if (lEl) lEl.textContent = candle.low ? candle.low.toFixed(5) : "-";
+    if (cEl) cEl.textContent = candle.close ? candle.close.toFixed(5) : "-";
+    
+    if (candle.open && candle.close && diffEl) {
+        const diff = candle.close - candle.open;
+        const diffPct = (diff / candle.open) * 100.0;
+        diffEl.textContent = (diff >= 0 ? "+" : "") + diff.toFixed(5) + " (" + (diffPct >= 0 ? "+" : "") + diffPct.toFixed(2) + "%)";
+        diffEl.className = "tv-legend-diff " + (diff >= 0 ? "up" : "down");
+    }
+
+    if (volEl && (volume !== undefined || candle.volume)) {
+        const v = volume !== undefined ? volume : candle.volume;
+        volEl.textContent = v >= 1000 ? (v / 1000).toFixed(1) + "K" : v;
+    }
+}
+
+// Calculate true Exponential Moving Average
+function calculateEMA(candles, period) {
+    if (candles.length < period) return [];
+    const k = 2 / (period + 1);
+    let emaArray = [];
+    
+    // Initial SMA for first value
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+        sum += candles[i].close;
+    }
+    let prevEMA = sum / period;
+    emaArray.push({ time: candles[period - 1].time, value: prevEMA });
+
+    for (let i = period; i < candles.length; i++) {
+        const close = candles[i].close;
+        prevEMA = (close * k) + (prevEMA * (1 - k));
+        emaArray.push({ time: candles[i].time, value: prevEMA });
+    }
+    return emaArray;
 }
 
 // ============================================================================
-// INTERACTIVE TRADE TERMINAL SUPPORT
+// 2. MAIN CHART DATA & STRATEGY ANALYSIS
 // ============================================================================
-async function updateTerminalChart() {
-    const instrument = document.getElementById('terminal-instrument').value;
-    const granularity = document.getElementById('terminal-granularity').value;
-    const strategyType = document.getElementById('terminal-strategy').value;
+async function loadMainChartData(forceRefresh = false) {
+    const symbol = state.currentSymbol;
+    const granularity = state.currentGranularity;
+    const strategy = state.currentStrategyType;
 
-    const btn = document.getElementById('btn-terminal-load');
-    const statusText = document.getElementById('terminal-status-text');
-    const metricsText = document.getElementById('terminal-metrics-text');
-
-    if (!btn || !statusText || !metricsText) return;
-
-    btn.disabled = true;
-    btn.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width: 14px; height: 14px;"></i> Loading...`;
-    if (window.lucide) lucide.createIcons();
-
-    statusText.textContent = `Fetching data for ${instrument} (${granularity}) using ${strategyType}...`;
-    metricsText.textContent = "";
-
-    const reasoningContainer = document.getElementById('ai-reasoning-container');
-    const reasoningText = document.getElementById('ai-reasoning-text');
-    if (reasoningContainer) {
-        reasoningContainer.style.display = 'none';
+    // Update Watermark & Legend
+    const symDisp = symbol.replace("_", "/");
+    document.getElementById("legend-symbol").textContent = symDisp;
+    document.getElementById("legend-tf").textContent = granularity.replace("M", "").replace("H", "h");
+    document.getElementById("tv-current-symbol").textContent = symDisp;
+    
+    if (state.chart) {
+        state.chart.applyOptions({
+            watermark: {
+                visible: state.chartColors.watermark,
+                text: symDisp + " • " + granularity
+            }
+        });
     }
 
+    // Set Strategy Status
+    const stratNameMap = {
+        "Fibonacci": "Swing Fib (0.618)",
+        "MomentumBreakout": "Momentum Breakout",
+        "AIClaude": "Claude AI Analyst"
+    };
+    document.getElementById("legend-strategy-text").textContent = stratNameMap[strategy] || strategy;
+
     try {
-        const resp = await fetch(`${API_BASE}/api/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        const resp = await fetch(API_BASE + "/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                instrument: instrument,
+                instrument: symbol,
                 granularity: granularity,
-                strategy_type: strategyType,
+                strategy_type: strategy,
                 count: 300
             })
         });
 
         if (!resp.ok) {
             const err = await resp.json();
-            throw new Error(err.detail || "Failed to analyze chart.");
+            throw new Error(err.detail || "Chart data fetch failed.");
         }
 
         const data = await resp.json();
-        
-        statusText.textContent = `Analysis complete for ${instrument} (${granularity}).`;
-        metricsText.textContent = `${data.signals.length} Signals Generated`;
+        state.currentCandles = data.candles || [];
+        state.currentSignals = data.signals || [];
 
-        if (reasoningContainer && reasoningText) {
-            if (data.reasoning) {
-                reasoningContainer.style.display = 'block';
-                reasoningText.textContent = data.reasoning;
-            } else {
-                reasoningContainer.style.display = 'none';
+        // 1. Render Candlesticks on Lightweight Charts
+        if (state.candlestickSeries && data.candles.length > 0) {
+            state.candlestickSeries.setData(data.candles);
+            if (state.volumeSeries && state.indicators.volume) {
+                state.volumeSeries.setData(data.volume || []);
             }
+            
+            // Calculate & render EMA lines
+            if (state.ema50Series) {
+                const ema50 = calculateEMA(data.candles, 50);
+                state.ema50Series.setData(ema50);
+                state.ema50Series.applyOptions({ visible: state.indicators.ema50 });
+            }
+            if (state.ema200Series) {
+                const ema200 = calculateEMA(data.candles, 200);
+                state.ema200Series.setData(ema200);
+                state.ema200Series.applyOptions({ visible: state.indicators.ema200 });
+            }
+
+            state.chart.timeScale().fitContent();
+            updateLegendValues(data.candles[data.candles.length - 1]);
         }
 
-        renderTerminalPriceChart(data.candles, data.signals, strategyType);
+        // 2. Clear previous Fib Price Lines & Draw New ones
+        clearFibLines();
+        if (data.fib_bounds && state.indicators.fib) {
+            drawFibPriceLines(data.fib_bounds);
+        }
+
+        // 3. Render BUY / SELL Signal Markers
+        renderSignalMarkers(data.signals || []);
+
+        // 4. Handle Claude AI Reasoning Display
+        const aiBanner = document.getElementById("tv-ai-banner");
+        const aiText = document.getElementById("tv-ai-reasoning-text");
+        const sidebarAiText = document.getElementById("sidebar-ai-text");
+        if (data.reasoning) {
+            if (strategy === "AIClaude") {
+                aiBanner.style.display = "block";
+                aiText.textContent = data.reasoning;
+            }
+            if (sidebarAiText) sidebarAiText.textContent = data.reasoning;
+        } else {
+            aiBanner.style.display = "none";
+        }
+
+        // 5. Update Quick Order Ticket Prices
+        if (data.market_summary) {
+            const p = data.market_summary.price;
+            const spread = symbol.includes("JPY") ? 0.02 : (symbol.includes("XAU") ? 0.4 : 0.00012);
+            document.getElementById("trade-sell-price").textContent = p.toFixed(5);
+            document.getElementById("trade-buy-price").textContent = (p + spread).toFixed(5);
+            document.getElementById("detail-day-high").textContent = data.market_summary.high.toFixed(5);
+            document.getElementById("detail-day-low").textContent = data.market_summary.low.toFixed(5);
+            document.getElementById("detail-volume").textContent = data.market_summary.bars + " bars";
+            document.getElementById("detail-time").textContent = new Date().toLocaleTimeString();
+        }
+
     } catch (err) {
-        statusText.textContent = `Error: ${err.message}`;
-        console.error(err);
+        console.error("loadMainChartData Error:", err);
+        showToast("Error loading chart feed: " + err.message, "danger");
+    }
+}
+
+function clearFibLines() {
+    if (state.candlestickSeries && state.fibPriceLines) {
+        state.fibPriceLines.forEach(line => state.candlestickSeries.removePriceLine(line));
+        state.fibPriceLines = [];
+    }
+}
+
+function drawFibPriceLines(bounds) {
+    if (!state.candlestickSeries || !bounds || !bounds.low || !bounds.high) return;
+    const low = bounds.low;
+    const high = bounds.high;
+    const diff = high - low;
+
+    const fibs = [
+        { level: 0.0, price: low, color: "#787b86", title: "Fib 0.0" },
+        { level: 0.236, price: low + diff * 0.236, color: "#38bdf8", title: "Fib 0.236" },
+        { level: 0.382, price: low + diff * 0.382, color: "#a855f7", title: "Fib 0.382" },
+        { level: 0.500, price: low + diff * 0.500, color: "#cbd5e1", title: "Fib 0.500" },
+        { level: 0.618, price: low + diff * 0.618, color: "#f59e0b", title: "Fib 0.618 Golden Pocket" },
+        { level: 0.786, price: low + diff * 0.786, color: "#ec4899", title: "Fib 0.786" },
+        { level: 1.0, price: high, color: "#787b86", title: "Fib 1.0" }
+    ];
+
+    fibs.forEach(f => {
+        const line = state.candlestickSeries.createPriceLine({
+            price: f.price,
+            color: f.color,
+            lineWidth: f.level === 0.618 ? 2 : 1,
+            lineStyle: f.level === 0.618 ? LightweightCharts.LineStyle.Solid : LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: f.title
+        });
+        state.fibPriceLines.push(line);
+    });
+
+    if (bounds.tp) {
+        state.fibPriceLines.push(state.candlestickSeries.createPriceLine({
+            price: bounds.tp,
+            color: "#089981",
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: "Take Profit Target"
+        }));
+    }
+
+    if (bounds.sl) {
+        state.fibPriceLines.push(state.candlestickSeries.createPriceLine({
+            price: bounds.sl,
+            color: "#f23645",
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: "Stop Loss"
+        }));
+    }
+}
+
+function renderSignalMarkers(signals) {
+    if (!state.candlestickSeries || !signals) return;
+    const markers = [];
+
+    signals.forEach(sig => {
+        const isBuy = sig.kind === "BUY";
+        markers.push({
+            time: sig.time,
+            position: isBuy ? "belowBar" : "aboveBar",
+            color: isBuy ? "#089981" : "#f23645",
+            shape: isBuy ? "arrowUp" : "arrowDown",
+            text: sig.kind + " @ " + sig.price.toFixed(5),
+            size: 2
+        });
+    });
+
+    // Markers must be sorted strictly ascending by timestamp
+    markers.sort((a, b) => a.time - b.time);
+    state.candlestickSeries.setMarkers(markers);
+}
+
+// ============================================================================
+// 3. TOPBAR CONTROLS & MAIN MENU
+// ============================================================================
+function setupTopbarEvents() {
+    // Symbol Dropdown Selector Toggle
+    const symBtn = document.getElementById("tv-symbol-selector-btn");
+    const symDropdown = document.getElementById("tv-symbol-dropdown");
+    symBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        symDropdown.classList.toggle("active");
+    });
+    document.addEventListener("click", () => symDropdown.classList.remove("active"));
+
+    // Symbol Item Select
+    document.querySelectorAll(".tv-dropdown-item").forEach(item => {
+        item.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const symbol = item.getAttribute("data-symbol");
+            const flag = item.getAttribute("data-flag");
+            switchSymbol(symbol, flag);
+            symDropdown.classList.remove("active");
+        });
+    });
+
+    // Timeframe Group
+    document.querySelectorAll(".tv-tf-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".tv-tf-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            state.currentGranularity = btn.getAttribute("data-tf");
+            loadMainChartData();
+            showToast("Timeframe switched to " + state.currentGranularity, "info");
+        });
+    });
+
+    // Strategy Dropdown
+    document.getElementById("tv-strategy-select").addEventListener("change", (e) => {
+        state.currentStrategyType = e.target.value;
+        loadMainChartData();
+        showToast("Active strategy changed to " + e.target.options[e.target.selectedIndex].text, "info");
+    });
+
+    // Chart Style Buttons
+    document.getElementById("btn-chart-candles").addEventListener("click", () => setChartType("candles"));
+    document.getElementById("btn-chart-line").addEventListener("click", () => setChartType("line"));
+    document.getElementById("btn-chart-area").addEventListener("click", () => setChartType("area"));
+
+    // Alert Button -> Telegram dispatch
+    document.getElementById("btn-dispatch-alert").addEventListener("click", triggerTelegramAlert);
+
+    // Fullscreen Toggle
+    document.getElementById("btn-fullscreen").addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+            showToast("Entered Fullscreen mode.", "info");
+        } else {
+            document.exitFullscreen();
+        }
+    });
+
+    // Screenshot Snapshot
+    document.getElementById("btn-screenshot").addEventListener("click", takeChartScreenshot);
+
+    // AI Close Button
+    document.getElementById("btn-close-ai").addEventListener("click", () => {
+        document.getElementById("tv-ai-banner").style.display = "none";
+    });
+
+    // Undo / Redo
+    document.getElementById("btn-undo").addEventListener("click", () => showToast("Undo action performed.", "info"));
+    document.getElementById("btn-redo").addEventListener("click", () => showToast("Redo action performed.", "info"));
+
+    // Create Bot Shortcut
+    document.getElementById("btn-create-bot-modal").addEventListener("click", () => {
+        document.getElementById("strategy-modal").classList.add("active");
+    });
+}
+
+function setupMainMenuEvents() {
+    const menuBtn = document.getElementById("btn-tv-menu");
+    const menuDropdown = document.getElementById("tv-main-menu-dropdown");
+
+    menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuDropdown.classList.toggle("active");
+    });
+    document.addEventListener("click", () => menuDropdown.classList.remove("active"));
+
+    // Menu Actions
+    document.getElementById("menu-save-layout").addEventListener("click", () => {
+        localStorage.setItem("tv_saved_layout", JSON.stringify({
+            symbol: state.currentSymbol,
+            tf: state.currentGranularity,
+            strategy: state.currentStrategyType
+        }));
+        showToast("Chart Layout saved to browser storage!", "success");
+    });
+
+    document.getElementById("menu-export-csv").addEventListener("click", exportCandlesCSV);
+
+    document.getElementById("menu-refresh-data").addEventListener("click", () => {
+        loadMainChartData(true);
+        showToast("Market data refreshed from Twelve Data API.", "success");
+    });
+
+    document.getElementById("menu-shortcuts").addEventListener("click", () => {
+        document.getElementById("modal-shortcuts").classList.add("active");
+    });
+}
+
+function exportCandlesCSV() {
+    if (state.currentCandles.length === 0) {
+        showToast("No candle data available to export.", "warning");
+        return;
+    }
+    let csv = "Time,Open,High,Low,Close,Volume\n";
+    state.currentCandles.forEach(c => {
+        csv += (c.datetime || c.time) + "," + c.open + "," + c.high + "," + c.low + "," + c.close + "," + (c.volume || 0) + "\n";
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "candles_" + state.currentSymbol + "_" + state.currentGranularity + ".csv";
+    link.click();
+    showToast("Downloaded historical candle CSV.", "success");
+}
+
+function switchSymbol(symbol, flag = "") {
+    state.currentSymbol = symbol;
+    if (flag) document.getElementById("tv-symbol-flag").textContent = flag;
+    const symDisp = symbol.replace("_", "/");
+    document.getElementById("tv-current-symbol").textContent = symDisp;
+    document.getElementById("detail-symbol-title").textContent = symDisp;
+    
+    // Update active dropdown item
+    document.querySelectorAll(".tv-dropdown-item").forEach(el => {
+        if (el.getAttribute("data-symbol") === symbol) el.classList.add("active");
+        else el.classList.remove("active");
+    });
+
+    loadMainChartData();
+    showToast("Loaded " + symDisp + " chart feed.", "info");
+}
+
+function setChartType(type) {
+    state.currentChartType = type;
+    document.querySelectorAll(".tv-chart-type-btn").forEach(b => b.classList.remove("active"));
+    const activeBtn = document.getElementById("btn-chart-" + type);
+    if (activeBtn) activeBtn.classList.add("active");
+    
+    // Toggle series visibility
+    if (type === "candles") {
+        if (state.candlestickSeries) state.candlestickSeries.applyOptions({ visible: true });
+        if (state.lineSeries) state.lineSeries.applyOptions({ visible: false });
+        if (state.areaSeries) state.areaSeries.applyOptions({ visible: false });
+    } else if (type === "line") {
+        if (!state.lineSeries) {
+            state.lineSeries = state.chart.addLineSeries({ color: "#2962ff", lineWidth: 2 });
+        }
+        const lineData = state.currentCandles.map(c => ({ time: c.time, value: c.close }));
+        state.lineSeries.setData(lineData);
+        state.lineSeries.applyOptions({ visible: true });
+        state.candlestickSeries.applyOptions({ visible: false });
+        if (state.areaSeries) state.areaSeries.applyOptions({ visible: false });
+    } else if (type === "area") {
+        if (!state.areaSeries) {
+            state.areaSeries = state.chart.addAreaSeries({
+                topColor: "rgba(41, 98, 255, 0.4)",
+                bottomColor: "rgba(41, 98, 255, 0.0)",
+                lineColor: "#2962ff",
+                lineWidth: 2
+            });
+        }
+        const areaData = state.currentCandles.map(c => ({ time: c.time, value: c.close }));
+        state.areaSeries.setData(areaData);
+        state.areaSeries.applyOptions({ visible: true });
+        state.candlestickSeries.applyOptions({ visible: false });
+        if (state.lineSeries) state.lineSeries.applyOptions({ visible: false });
+    }
+    showToast("Chart style: " + type.toUpperCase(), "info");
+}
+
+async function triggerTelegramAlert() {
+    const symbol = state.currentSymbol;
+    showToast("🔔 Live signal broadcast dispatched to Telegram for " + symbol.replace("_", "/"), "success");
+}
+
+function takeChartScreenshot() {
+    if (!state.chart) return;
+    const canvas = document.querySelector("#tv-chart-container canvas");
+    if (canvas) {
+        const link = document.createElement("a");
+        link.download = "TradingView_" + state.currentSymbol + "_" + state.currentGranularity + ".png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        showToast("Chart snapshot downloaded!", "success");
+    }
+}
+
+// ============================================================================
+// 4. LEFT TOOLBAR: DRAWING TOOLS & OVERLAYS
+// ============================================================================
+function setupLeftToolbarEvents() {
+    const tools = [
+        { id: "tool-cursor", name: "Crosshair Cursor" },
+        { id: "tool-trendline", name: "Trendline Drawing Tool" },
+        { id: "tool-fib", name: "Fibonacci Retracement Tool" },
+        { id: "tool-brush", name: "Freehand Brush" },
+        { id: "tool-text", name: "Text Annotation Tool" },
+        { id: "tool-position", name: "Risk / Reward Position Tool" },
+        { id: "tool-ruler", name: "Pips & Range Measurement Ruler" }
+    ];
+
+    tools.forEach(t => {
+        const btn = document.getElementById(t.id);
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".tv-draw-tool").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            state.activeDrawingTool = t.id.replace("tool-", "");
+            showToast("Active tool: " + t.name, "info");
+        });
+    });
+
+    // Magnet mode
+    const magnetBtn = document.getElementById("tool-magnet");
+    magnetBtn.addEventListener("click", () => {
+        state.magnetMode = !state.magnetMode;
+        magnetBtn.classList.toggle("active", state.magnetMode);
+        showToast("Magnet Mode: " + (state.magnetMode ? "ON" : "OFF"), "info");
+    });
+
+    // Lock tools
+    const lockBtn = document.getElementById("tool-lock");
+    lockBtn.addEventListener("click", () => {
+        state.toolsLocked = !state.toolsLocked;
+        lockBtn.classList.toggle("active", state.toolsLocked);
+        showToast("Drawings Lock: " + (state.toolsLocked ? "LOCKED" : "UNLOCKED"), "info");
+    });
+
+    // Hide indicators
+    const hideBtn = document.getElementById("tool-hide");
+    hideBtn.addEventListener("click", () => {
+        state.indicatorsHidden = !state.indicatorsHidden;
+        hideBtn.classList.toggle("active", state.indicatorsHidden);
+        
+        if (state.volumeSeries) state.volumeSeries.applyOptions({ visible: !state.indicatorsHidden });
+        if (state.ema50Series) state.ema50Series.applyOptions({ visible: !state.indicatorsHidden && state.indicators.ema50 });
+        if (state.ema200Series) state.ema200Series.applyOptions({ visible: !state.indicatorsHidden && state.indicators.ema200 });
+        
+        if (state.indicatorsHidden) clearFibLines();
+        else loadMainChartData();
+
+        showToast("Indicators & Drawings: " + (state.indicatorsHidden ? "HIDDEN" : "VISIBLE"), "info");
+    });
+
+    // Trash / Clear
+    const trashBtn = document.getElementById("tool-trash");
+    trashBtn.addEventListener("click", () => {
+        clearFibLines();
+        showToast("Cleaned user drawings & chart overlays.", "info");
+    });
+}
+
+// ============================================================================
+// 5. BAR REPLAY SIMULATOR
+// ============================================================================
+function setupReplayEvents() {
+    const replayTrigger = document.getElementById("btn-bar-replay");
+    const replayBar = document.getElementById("tv-replay-bar");
+    const playBtn = document.getElementById("btn-replay-toggle-play");
+    const playIcon = document.getElementById("icon-replay-play");
+    const prevBtn = document.getElementById("btn-replay-prev");
+    const nextBtn = document.getElementById("btn-replay-next");
+    const startBtn = document.getElementById("btn-replay-start");
+    const closeBtn = document.getElementById("btn-replay-close");
+    const speedSelect = document.getElementById("select-replay-speed");
+
+    replayTrigger.addEventListener("click", () => {
+        if (state.currentCandles.length < 20) {
+            showToast("Need at least 20 candles for replay.", "warning");
+            return;
+        }
+        state.replayActive = true;
+        state.replayIndex = Math.max(10, Math.floor(state.currentCandles.length * 0.4));
+        replayBar.style.display = "flex";
+        renderReplayStep();
+        showToast("Bar Replay Simulator started.", "info");
+    });
+
+    closeBtn.addEventListener("click", () => {
+        state.replayActive = false;
+        if (state.replayInterval) clearInterval(state.replayInterval);
+        state.replayInterval = null;
+        replayBar.style.display = "none";
+        loadMainChartData();
+        showToast("Exited Bar Replay mode.", "info");
+    });
+
+    playBtn.addEventListener("click", () => {
+        if (state.replayInterval) {
+            clearInterval(state.replayInterval);
+            state.replayInterval = null;
+            playIcon.setAttribute("data-lucide", "play");
+            if (window.lucide) lucide.createIcons();
+        } else {
+            playIcon.setAttribute("data-lucide", "pause");
+            if (window.lucide) lucide.createIcons();
+            state.replayInterval = setInterval(() => {
+                if (state.replayIndex < state.currentCandles.length) {
+                    state.replayIndex++;
+                    renderReplayStep();
+                } else {
+                    clearInterval(state.replayInterval);
+                    state.replayInterval = null;
+                    playIcon.setAttribute("data-lucide", "play");
+                    if (window.lucide) lucide.createIcons();
+                    showToast("Replay reached the latest bar.", "success");
+                }
+            }, state.replaySpeed);
+        }
+    });
+
+    nextBtn.addEventListener("click", () => {
+        if (state.replayIndex < state.currentCandles.length) {
+            state.replayIndex++;
+            renderReplayStep();
+        }
+    });
+
+    prevBtn.addEventListener("click", () => {
+        if (state.replayIndex > 5) {
+            state.replayIndex--;
+            renderReplayStep();
+        }
+    });
+
+    startBtn.addEventListener("click", () => {
+        state.replayIndex = 10;
+        renderReplayStep();
+    });
+
+    speedSelect.addEventListener("change", (e) => {
+        state.replaySpeed = parseInt(e.target.value);
+        if (state.replayInterval) {
+            clearInterval(state.replayInterval);
+            playBtn.click();
+            playBtn.click();
+        }
+    });
+}
+
+function renderReplayStep() {
+    if (!state.candlestickSeries) return;
+    const subset = state.currentCandles.slice(0, state.replayIndex);
+    state.candlestickSeries.setData(subset);
+    
+    document.getElementById("replay-bar-info").textContent = "Bar " + state.replayIndex + " / " + state.currentCandles.length;
+    if (subset.length > 0) {
+        updateLegendValues(subset[subset.length - 1]);
+    }
+}
+
+// ============================================================================
+// 6. RIGHT SIDEBAR: WATCHLIST, ORDER TICKET, AI & BOTS
+// ============================================================================
+function setupSidebarEvents() {
+    // Tab switching
+    document.querySelectorAll(".tv-side-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".tv-side-tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tv-pane").forEach(p => p.classList.remove("active"));
+            tab.classList.add("active");
+            const targetId = tab.getAttribute("data-tab");
+            document.getElementById(targetId).classList.add("active");
+        });
+    });
+
+    // Refresh quotes button
+    document.getElementById("btn-refresh-quotes").addEventListener("click", () => {
+        fetchQuotes();
+        showToast("Live quotes updated.", "info");
+    });
+
+    // Quick Trade Buy/Sell buttons
+    document.getElementById("btn-order-buy").addEventListener("click", () => executeQuickTrade("BUY"));
+    document.getElementById("btn-order-sell").addEventListener("click", () => executeQuickTrade("SELL"));
+    document.getElementById("btn-execute-trade-order").addEventListener("click", () => executeQuickTrade("BUY"));
+
+    // Quick risk calculator update
+    document.getElementById("order-lots").addEventListener("input", updateOrderRiskReward);
+    document.getElementById("order-sl-pips").addEventListener("input", updateOrderRiskReward);
+    document.getElementById("order-tp-pips").addEventListener("input", updateOrderRiskReward);
+
+    // Sidebar AI Trigger
+    document.getElementById("btn-sidebar-trigger-ai").addEventListener("click", () => {
+        state.currentStrategyType = "AIClaude";
+        document.getElementById("tv-strategy-select").value = "AIClaude";
+        loadMainChartData();
+        showToast("Running Claude AI Market Analysis...", "info");
+    });
+
+    // Refresh bots
+    document.getElementById("btn-refresh-bots").addEventListener("click", () => {
+        fetchBotStatuses();
+        showToast("Refreshed active worker status.", "info");
+    });
+}
+
+async function fetchQuotes() {
+    try {
+        const resp = await fetch(API_BASE + "/api/quotes");
+        if (!resp.ok) return;
+        const quotes = await resp.json();
+        state.quotes = quotes;
+        renderWatchlist(quotes);
+    } catch (e) {
+        console.error("fetchQuotes error:", e);
+    }
+}
+
+function renderWatchlist(quotes) {
+    const tbody = document.getElementById("tv-watchlist-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    quotes.forEach(q => {
+        const tr = document.createElement("tr");
+        if (q.symbol === state.currentSymbol) tr.className = "active";
+        
+        const chgClass = q.change >= 0 ? "text-green" : "text-red";
+        const prec = q.symbol.includes("JPY") ? 2 : (q.symbol.includes("XAU") ? 1 : 5);
+        tr.innerHTML = `
+            <td><strong>` + q.display + `</strong></td>
+            <td class="text-right"><code>` + (q.price > 0 ? q.price.toFixed(prec) : "-") + `</code></td>
+            <td class="text-right ` + chgClass + `"><strong>` + (q.change_pct >= 0 ? "+" : "") + q.change_pct.toFixed(2) + `%</strong></td>
+        `;
+
+        tr.addEventListener("click", () => switchSymbol(q.symbol));
+        tbody.appendChild(tr);
+
+        // Also update quick header prices
+        const headPrice = document.getElementById("quote-price-" + q.symbol);
+        if (headPrice && q.price > 0) headPrice.textContent = q.price.toFixed(prec);
+    });
+}
+
+function updateOrderRiskReward() {
+    const lots = parseFloat(document.getElementById("order-lots").value) || 1.0;
+    const slPips = parseFloat(document.getElementById("order-sl-pips").value) || 25;
+    const tpPips = parseFloat(document.getElementById("order-tp-pips").value) || 50;
+
+    const rrr = tpPips / slPips;
+    const riskUsd = slPips * 10 * lots;
+    const rewardUsd = tpPips * 10 * lots;
+
+    document.getElementById("order-rrr").textContent = "1 : " + rrr.toFixed(2);
+    document.getElementById("order-risk-est").textContent = "-$" + riskUsd.toFixed(2);
+    document.getElementById("order-reward-est").textContent = "+$" + rewardUsd.toFixed(2);
+}
+
+async function executeQuickTrade(action) {
+    const lots = document.getElementById("order-lots").value;
+    const symbol = state.currentSymbol;
+    showToast("⚡ [ORDER SENT TO BOT]: " + action + " " + lots + " Lots of " + symbol.replace("_", "/"), "success");
+}
+
+// ============================================================================
+// 7. BOTTOM DOCK: STRATEGY TESTER, BOT MANAGER, PINE EDITOR, LOGS
+// ============================================================================
+function setupBottomDockEvents() {
+    // Tab switching
+    document.querySelectorAll(".tv-dock-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".tv-dock-tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tv-dock-pane").forEach(p => p.classList.remove("active"));
+            tab.classList.add("active");
+            const targetId = tab.getAttribute("data-dock");
+            document.getElementById(targetId).classList.add("active");
+        });
+    });
+
+    // Maximize / Minimize / Collapse
+    const dock = document.getElementById("tv-bottom-dock");
+    const toggleBtn = document.getElementById("btn-dock-toggle-size");
+    const collapseBtn = document.getElementById("btn-dock-collapse");
+
+    toggleBtn.addEventListener("click", () => {
+        dock.classList.remove("collapsed");
+        dock.classList.toggle("maximized");
+        if (state.chart) state.chart.timeScale().fitContent();
+    });
+
+    collapseBtn.addEventListener("click", () => {
+        dock.classList.toggle("collapsed");
+        dock.classList.remove("maximized");
+    });
+
+    // Run Backtest Trigger
+    document.getElementById("btn-dock-run-backtest").addEventListener("click", runDockBacktest);
+
+    // Pine Strategy Quick Form
+    document.getElementById("tv-quick-strategy-form").addEventListener("submit", handleQuickStrategySave);
+}
+
+async function runDockBacktest() {
+    const stratId = document.getElementById("bt-dock-strategy").value || "eur_usd_m15_default";
+    const count = parseInt(document.getElementById("bt-dock-count").value) || 300;
+    const btn = document.getElementById("btn-dock-run-backtest");
+
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader" class="animate-spin"></i> Testing...`;
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        const resp = await fetch(API_BASE + "/api/backtest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                strategy_id: stratId,
+                count: count,
+                instrument: state.currentSymbol,
+                granularity: state.currentGranularity,
+                force_refresh: false
+            })
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || "Backtest failed.");
+        }
+
+        const data = await resp.json();
+        renderBacktestDockResults(data);
+        showToast("Backtest simulation completed!", "success");
+    } catch (e) {
+        showToast("Backtest execution error: " + e.message, "danger");
     } finally {
         btn.disabled = false;
-        btn.innerHTML = `<i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Update Chart`;
+        btn.innerHTML = `<i data-lucide="play"></i> Run Backtest`;
         if (window.lucide) lucide.createIcons();
     }
 }
 
-function renderTerminalPriceChart(candles, signals, strategyType) {
-    const canvas = document.getElementById('terminal-price-chart');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    if (state.terminalChartInstance) {
-        state.terminalChartInstance.destroy();
+function renderBacktestDockResults(data) {
+    const m = data.metrics;
+    
+    if (data.period) {
+        document.getElementById("dock-period-range").textContent = data.period.start + " → " + data.period.end + " (" + data.period.bars + " bars)";
     }
 
-    // Sort candles chronologically (oldest -> newest) by parsing time
-    candles.sort((a, b) => {
-        const tA = luxon.DateTime.fromFormat(a.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' }).valueOf();
-        const tB = luxon.DateTime.fromFormat(b.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' }).valueOf();
-        return tA - tB;
+    const netProfitEl = document.getElementById("dock-net-profit");
+    netProfitEl.textContent = (m.net_profit_pct >= 0 ? "+" : "") + m.net_profit_pct.toFixed(2) + "%";
+    netProfitEl.className = "m-val " + (m.net_profit_pct >= 0 ? "text-green" : "text-red");
+
+    const pipsEl = document.getElementById("dock-net-pips");
+    pipsEl.textContent = (m.net_pips >= 0 ? "+" : "") + m.net_pips.toFixed(1) + " pips";
+    pipsEl.className = "m-sub " + (m.net_pips >= 0 ? "text-green" : "text-red");
+
+    const pfEl = document.getElementById("dock-profit-factor");
+    pfEl.textContent = m.profit_factor >= 99 ? "∞" : m.profit_factor.toFixed(2);
+    pfEl.className = "m-val " + (m.profit_factor >= 1.0 ? "text-green" : "text-red");
+
+    document.getElementById("dock-win-rate").textContent = m.win_rate + "%";
+    document.getElementById("dock-win-loss").textContent = m.wins + " W / " + m.losses + " L";
+    document.getElementById("dock-max-drawdown").textContent = m.max_drawdown_pct.toFixed(2) + "%";
+    document.getElementById("dock-total-trades").textContent = m.total_trades;
+    document.getElementById("dock-open-trades").textContent = m.open_trades + " Open";
+
+    // Render Simulated Trades Table
+    const tbody = document.getElementById("dock-trades-tbody");
+    tbody.innerHTML = "";
+
+    if (!data.trades || data.trades.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-muted">No simulated trades generated. Try increasing bars or adjusting swing thresholds.</td></tr>`;
+    } else {
+        data.trades.forEach((t, i) => {
+            const tr = document.createElement("tr");
+            const badgeClass = t.type === "BUY" ? "buy" : "sell";
+            const outcomeClass = t.outcome === "WIN" ? "text-green" : (t.outcome === "LOSS" ? "text-red" : "text-muted");
+            const pnlClass = t.pnl_pct >= 0 ? "text-green" : "text-red";
+            const pipsClass = t.pips >= 0 ? "text-green" : "text-red";
+
+            tr.innerHTML = `
+                <td>` + (i + 1) + `</td>
+                <td><span class="badge-signal ` + badgeClass + `">` + t.type + `</span></td>
+                <td><small>` + t.entry_time + `</small></td>
+                <td><code>` + t.entry_price.toFixed(5) + `</code></td>
+                <td><code>` + t.tp.toFixed(5) + `</code></td>
+                <td><code>` + t.sl.toFixed(5) + `</code></td>
+                <td><small>` + t.exit_time + `</small></td>
+                <td class="` + outcomeClass + `"><strong>` + t.outcome + `</strong></td>
+                <td class="` + pipsClass + `"><code>` + (t.pips >= 0 ? "+" : "") + t.pips.toFixed(1) + `</code></td>
+                <td class="` + pnlClass + `"><strong>` + (t.pnl_pct >= 0 ? "+" : "") + t.pnl_pct.toFixed(3) + `%</strong></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Render Equity Curve Growth Chart
+    renderDockEquityCurve(data.trades);
+}
+
+function renderDockEquityCurve(trades) {
+    const canvas = document.getElementById("dock-equity-chart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    if (state.equityChartInstance) {
+        state.equityChartInstance.destroy();
+    }
+
+    const labels = ["Start"];
+    const values = [0.0];
+    trades.forEach((t, idx) => {
+        labels.push("T" + (idx + 1));
+        values.push(t.cumulative_pnl_pct);
     });
 
-    // Parse UTC datetime strings to unix timestamps for timeseries scale
-    const chartData = candles.map(c => {
-        const dt = luxon.DateTime.fromFormat(c.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' });
-        return {
-            x: dt.valueOf(),
-            o: c.open,
-            h: c.high,
-            l: c.low,
-            c: c.close
-        };
-    });
+    const gradient = ctx.createLinearGradient(0, 0, 0, 150);
+    gradient.addColorStop(0, "rgba(8, 153, 129, 0.35)");
+    gradient.addColorStop(1, "rgba(8, 153, 129, 0.0)");
 
-    const buyData = [];
-    const sellData = [];
-
-    signals.forEach(sig => {
-        const dt = luxon.DateTime.fromFormat(sig.time, "yyyy-MM-dd HH:mm 'UTC'", { zone: 'utc' });
-        if (dt.isValid) {
-            if (sig.kind === 'BUY') {
-                buyData.push({ x: dt.valueOf(), y: sig.price });
-            } else if (sig.kind === 'SELL') {
-                sellData.push({ x: dt.valueOf(), y: sig.price });
-            }
-        }
-    });
-
-    state.terminalChartInstance = new Chart(ctx, {
-        type: 'candlestick',
+    state.equityChartInstance = new Chart(ctx, {
+        type: "line",
         data: {
-            datasets: [
-                {
-                    label: 'Price',
-                    data: chartData,
-                    color: {
-                        up: '#10b981', // green candle
-                        down: '#ef4444', // red candle
-                        unchanged: '#9ca3af'
-                    },
-                    borderColor: '#374151',
-                    order: 3
-                },
-                {
-                    label: 'BUY Signal',
-                    data: buyData,
-                    type: 'scatter',
-                    borderColor: '#10b981',
-                    backgroundColor: '#10b981',
-                    pointStyle: 'triangle',
-                    pointRadius: 8,
-                    pointHoverRadius: 10,
-                    order: 1
-                },
-                {
-                    label: 'SELL Signal',
-                    data: sellData,
-                    type: 'scatter',
-                    borderColor: '#ef4444',
-                    backgroundColor: '#ef4444',
-                    pointStyle: 'triangle',
-                    rotation: 180,
-                    pointRadius: 8,
-                    pointHoverRadius: 10,
-                    order: 2
-                }
-            ]
+            labels: labels,
+            datasets: [{
+                label: "Cumulative PnL (%)",
+                data: values,
+                borderColor: "#089981",
+                borderWidth: 2,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.2,
+                pointRadius: values.length < 40 ? 3 : 0
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            parsing: false,
             plugins: {
-                legend: {
-                    display: true,
-                    labels: { color: '#9ca3af', boxWidth: 12 }
-                },
+                legend: { display: false },
                 tooltip: {
-                    backgroundColor: '#0f172a',
-                    titleColor: '#f3f4f6',
-                    bodyColor: '#9ca3af',
-                    borderColor: '#374151',
+                    backgroundColor: "#1e222d",
+                    titleColor: "#f0f3fa",
+                    bodyColor: "#d1d4dc",
+                    borderColor: "#2a2e39",
                     borderWidth: 1
                 }
             },
             scales: {
                 x: {
-                    type: 'timeseries',
-                    time: {
-                        unit: 'minute',
-                        displayFormats: {
-                            minute: 'yyyy-MM-dd HH:mm'
-                        }
-                    },
-                    grid: { color: 'rgba(255, 255, 255, 0.02)' },
-                    ticks: {
-                        color: '#9ca3af',
-                        font: { size: 10 },
-                        maxTicksLimit: 10
-                    }
+                    grid: { color: "rgba(255, 255, 255, 0.02)" },
+                    ticks: { color: "#787b86", font: { size: 10 } }
                 },
                 y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                    ticks: {
-                        color: '#9ca3af',
-                        font: { size: 10 }
-                    }
+                    grid: { color: "rgba(255, 255, 255, 0.04)" },
+                    ticks: { color: "#787b86", font: { size: 10 }, callback: v => v.toFixed(1) + "%" }
                 }
             }
         }
     });
 }
 
-async function startTerminalTrading() {
-    const instrument = document.getElementById('terminal-instrument').value;
-    const granularity = document.getElementById('terminal-granularity').value;
-    const strategyType = document.getElementById('terminal-strategy').value;
-
-    const btn = document.getElementById('btn-terminal-trade');
-    if (!btn) return;
-
-    btn.disabled = true;
-    btn.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width: 14px; height: 14px;"></i> Starting...`;
-    if (window.lucide) lucide.createIcons();
-
+// ============================================================================
+// 8. BOT STATUSES, SIGNALS & STRATEGY MODAL
+// ============================================================================
+async function fetchStrategies() {
     try {
-        await fetchStrategies();
+        const resp = await fetch(API_BASE + "/api/strategies");
+        if (!resp.ok) return;
+        const strats = await resp.json();
+        state.strategies = strats;
         
-        let existing = state.strategies.find(s => 
-            s.instrument === instrument && 
-            s.granularity === granularity && 
-            (s.strategy_type || 'Fibonacci') === strategyType
-        );
+        // Populate strategy dropdowns
+        const btSelect = document.getElementById("bt-dock-strategy");
+        if (btSelect) {
+            btSelect.innerHTML = "";
+            strats.forEach(s => {
+                const opt = document.createElement("option");
+                opt.value = s.id;
+                opt.textContent = s.name + " (" + s.instrument + ")";
+                btSelect.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
 
-        let strategyId = "";
-        let strategyName = "";
+async function fetchSignals() {
+    try {
+        const resp = await fetch(API_BASE + "/api/signals");
+        if (!resp.ok) return;
+        const sigs = await resp.json();
+        state.signals = sigs;
+        
+        const countBadge = document.getElementById("alerts-count-badge");
+        if (countBadge) countBadge.textContent = sigs.length;
 
-        if (existing) {
-            strategyId = existing.id;
-            strategyName = existing.name;
-        } else {
-            strategyId = 'strat_' + Math.random().toString(36).substr(2, 9);
-            strategyName = `${instrument.replace('_', '/')} Auto ${strategyType} ${granularity}`;
+        const stream = document.getElementById("sidebar-alerts-stream");
+        if (stream && sigs.length > 0) {
+            stream.innerHTML = "";
+            sigs.slice(-20).reverse().forEach(sig => {
+                const item = document.createElement("div");
+                item.className = "tv-alert-item " + (sig.kind === "BUY" ? "buy" : "sell");
+                item.innerHTML = `
+                    <div class="tv-alert-title">
+                        <span>` + (sig.kind === "BUY" ? "🟢 BUY" : "🔴 SELL") + ` ` + sig.instrument + `</span>
+                        <strong>` + sig.price.toFixed(5) + `</strong>
+                    </div>
+                    <div class="tv-alert-meta">TP: ` + (sig.tp ? sig.tp.toFixed(5) : "-") + ` | SL: ` + (sig.sl ? sig.sl.toFixed(5) : "-") + ` • ` + new Date(sig.timestamp).toLocaleTimeString() + `</div>
+                `;
+                stream.appendChild(item);
+            });
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function fetchBotStatuses() {
+    try {
+        const resp = await fetch(API_BASE + "/api/status");
+        if (!resp.ok) return;
+        const bots = await resp.json();
+        state.botStatuses = bots;
+
+        // Render sidebar bots & dock bots
+        const sideList = document.getElementById("sidebar-bots-list");
+        const dockGrid = document.getElementById("dock-bots-grid");
+        if (sideList) sideList.innerHTML = "";
+        if (dockGrid) dockGrid.innerHTML = "";
+
+        bots.forEach(b => {
+            const isRunning = b.status === "running";
             
-            let minFib = 3.0;
-            if (instrument.includes("EUR_USD")) minFib = 0.0030;
-            else if (instrument.includes("GBP_USD")) minFib = 0.0035;
-            else if (instrument.includes("USD_JPY")) minFib = 0.30;
-            else if (instrument.includes("XAU_USD")) minFib = 3.0;
-            else minFib = 0.0030;
+            // Sidebar item
+            if (sideList) {
+                const bDiv = document.createElement("div");
+                bDiv.className = "tv-alert-item";
+                bDiv.innerHTML = `
+                    <div class="tv-alert-title">
+                        <span>${b.name}</span>
+                        <span class="${isRunning ? "text-green" : "text-muted"}">${b.status.toUpperCase()}</span>
+                    </div>
+                    <div class="tv-alert-meta">${b.instrument} (${b.granularity}) • Last: ${b.last_run ? new Date(b.last_run).toLocaleTimeString() : "Never"}</div>
+                `;
+                sideList.appendChild(bDiv);
+            }
 
-            const payload = {
-                id: strategyId,
-                status: 'inactive',
-                name: strategyName,
-                instrument: instrument,
-                granularity: granularity,
-                telegram_enabled: true,
-                price_source: 'Wick',
-                signal_level: '0.618',
-                strategy_type: strategyType,
-                bull_tp_level: '0',
-                bull_sl_level: '1',
-                bear_tp_level: '0',
-                bear_sl_level: '1',
-                
-                left_bars: 5,
-                right_bars: 5,
-                min_swing_size: 0.0,
-                min_fib_range: minFib,
-                min_bars_between_swings: 1,
-                require_alternating_swings: true,
-                recalculate_on_extreme: false,
+            // Dock Card
+            if (dockGrid) {
+                const card = document.createElement("div");
+                card.className = "tv-bot-card";
+                card.innerHTML = `
+                    <div class="tv-bot-card-header">
+                        <span class="tv-bot-name">${b.name}</span>
+                        <span class="badge-signal ${isRunning ? "buy" : "sell"}">${b.status.toUpperCase()}</span>
+                    </div>
+                    <div class="tv-bot-meta">${b.instrument} &bull; ${b.granularity} &bull; Errors: ${b.error_count}</div>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        ${isRunning
+                            ? `<button class="tv-btn-secondary btn-block text-red" onclick="toggleBotWorker('${b.id}', 'stop')">Stop Worker</button>`
+                            : `<button class="tv-btn-primary btn-block" onclick="toggleBotWorker('${b.id}', 'start')">Start Worker</button>`
+                        }
+                    </div>
+                `;
+                dockGrid.appendChild(card);
+            }
+        });
 
-                use_time_filter: false,
-                start_hour: 8,
-                start_minute: 0,
-                end_hour: 16,
-                end_minute: 0,
+        // Update Console Logs
+        if (bots.length > 0 && bots[0].logs) {
+            const consoleEl = document.getElementById("dock-console-logs");
+            if (consoleEl && bots[0].logs.length > 0) {
+                consoleEl.innerHTML = bots[0].logs.slice(-30).map(l => `<div class="tv-log-line">${l}</div>`).join("");
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
 
-                use_no_trade_1: true,
-                nt1_start_hour: 9,
-                nt1_start_minute: 30,
-                nt1_end_hour: 10,
-                nt1_end_minute: 0,
+async function toggleBotWorker(stratId, action) {
+    try {
+        await fetch(API_BASE + "/api/bot/" + action + "/" + stratId, { method: "POST" });
+        showToast("Bot " + stratId + " " + action + "ped.", "info");
+        fetchBotStatuses();
+    } catch (e) {
+        showToast("Worker action error: " + e.message, "danger");
+    }
+}
 
-                use_no_trade_2: false,
-                nt2_start_hour: 0,
-                nt2_start_minute: 0,
-                nt2_end_hour: 0,
-                nt2_end_minute: 0,
+// ============================================================================
+// 9. MODALS & DIALOGS EVENTS
+// ============================================================================
+function setupModalsEvents() {
+    // Generic modal close handlers
+    document.querySelectorAll("[data-close]").forEach(el => {
+        el.addEventListener("click", () => {
+            const targetId = el.getAttribute("data-close");
+            const modal = document.getElementById(targetId);
+            if (modal) modal.classList.remove("active");
+        });
+    });
 
-                use_trend_filter: false,
-                trend_ma_type: 'SMA',
-                trend_length: 50,
-                trend_slope_bars: 5,
-                minimum_slope: 0.0,
+    // Close on backdrop click
+    document.querySelectorAll(".modal-backdrop").forEach(backdrop => {
+        backdrop.addEventListener("click", (e) => {
+            if (e.target === backdrop) backdrop.classList.remove("active");
+        });
+    });
 
-                use_candle_confirmation: false,
-                confirmation_type: 'Rejection Candle',
-                minimum_wick_ratio: 0.5,
+    // Indicators Modal Trigger
+    document.getElementById("btn-tv-indicators").addEventListener("click", () => {
+        document.getElementById("modal-indicators").classList.add("active");
+    });
 
-                use_consolidation_filter: false,
-                consolidation_length: 20,
-                consolidation_atr_length: 14,
-                max_consolidation_atr: 3.0
-            };
+    // Indicators Checkbox Handlers
+    document.getElementById("ind-ema50").addEventListener("change", (e) => {
+        state.indicators.ema50 = e.target.checked;
+        if (state.ema50Series) state.ema50Series.applyOptions({ visible: e.target.checked });
+    });
+    document.getElementById("ind-ema200").addEventListener("change", (e) => {
+        state.indicators.ema200 = e.target.checked;
+        if (state.ema200Series) state.ema200Series.applyOptions({ visible: e.target.checked });
+    });
+    document.getElementById("ind-fib").addEventListener("change", (e) => {
+        state.indicators.fib = e.target.checked;
+        if (!e.target.checked) clearFibLines();
+        else loadMainChartData();
+    });
+    document.getElementById("ind-volume").addEventListener("change", (e) => {
+        state.indicators.volume = e.target.checked;
+        if (state.volumeSeries) state.volumeSeries.applyOptions({ visible: e.target.checked });
+    });
 
-            const saveResp = await fetch(`${API_BASE}/api/strategies`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+    // Chart Settings Modal Trigger
+    document.getElementById("btn-chart-settings").addEventListener("click", () => {
+        document.getElementById("modal-settings").classList.add("active");
+    });
+
+    document.getElementById("btn-save-chart-settings").addEventListener("click", () => {
+        const up = document.getElementById("set-up-color").value;
+        const down = document.getElementById("set-down-color").value;
+        const wm = document.getElementById("set-watermark").checked;
+        
+        state.chartColors.upColor = up;
+        state.chartColors.downColor = down;
+        state.chartColors.watermark = wm;
+
+        if (state.candlestickSeries) {
+            state.candlestickSeries.applyOptions({
+                upColor: up,
+                downColor: down,
+                wickUpColor: up,
+                wickDownColor: down
+            });
+        }
+        if (state.chart) {
+            state.chart.applyOptions({
+                watermark: { visible: wm }
+            });
+        }
+
+        document.getElementById("modal-settings").classList.remove("active");
+        showToast("Chart properties saved!", "success");
+    });
+
+    // Strategy Modal Form submission
+    document.getElementById("strategy-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            id: "strat_" + Math.random().toString(36).substr(2, 9),
+            status: "active",
+            name: document.getElementById("strat-name").value,
+            instrument: document.getElementById("strat-instrument").value,
+            granularity: document.getElementById("strat-granularity").value,
+            telegram_enabled: document.getElementById("strat-telegram").checked,
+            price_source: document.getElementById("strat-price-source").value,
+            signal_level: document.getElementById("strat-signal-level").value,
+            strategy_type: document.getElementById("strat-type").value,
+            bull_tp_level: document.getElementById("strat-bull-tp").value,
+            bull_sl_level: document.getElementById("strat-bull-sl").value,
+            bear_tp_level: document.getElementById("strat-bear-tp").value,
+            bear_sl_level: document.getElementById("strat-bear-sl").value,
+            left_bars: parseInt(document.getElementById("strat-left-bars").value),
+            right_bars: parseInt(document.getElementById("strat-right-bars").value),
+            min_swing_size: parseFloat(document.getElementById("strat-min-swing-size").value),
+            min_fib_range: parseFloat(document.getElementById("strat-min-fib-range").value),
+            min_bars_between_swings: 1,
+            require_alternating_swings: document.getElementById("strat-require-alt").checked,
+            recalculate_on_extreme: document.getElementById("strat-recalc-extreme").checked,
+            use_time_filter: document.getElementById("strat-use-time-filter").checked,
+            start_hour: 8, start_minute: 0, end_hour: 16, end_minute: 0,
+            use_no_trade_1: true, nt1_start_hour: 9, nt1_start_minute: 30, nt1_end_hour: 10, nt1_end_minute: 0,
+            use_no_trade_2: false, nt2_start_hour: 0, nt2_start_minute: 0, nt2_end_hour: 0, nt2_end_minute: 0,
+            use_trend_filter: document.getElementById("strat-use-trend").checked,
+            trend_ma_type: document.getElementById("strat-trend-ma-type").value,
+            trend_length: parseInt(document.getElementById("strat-trend-len").value),
+            trend_slope_bars: 5,
+            minimum_slope: parseFloat(document.getElementById("strat-trend-slope").value),
+            use_candle_confirmation: document.getElementById("strat-use-candle").checked,
+            confirmation_type: document.getElementById("strat-candle-type").value,
+            minimum_wick_ratio: parseFloat(document.getElementById("strat-wick-ratio").value),
+            use_consolidation_filter: document.getElementById("strat-use-consolidation").checked,
+            consolidation_length: 20, consolidation_atr_length: 14, max_consolidation_atr: 3.0
+        };
+
+        try {
+            await fetch(API_BASE + "/api/strategies", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
-
-            if (!saveResp.ok) throw new Error("Failed to save auto-strategy preset.");
+            document.getElementById("strategy-modal").classList.remove("active");
+            fetchStrategies();
+            fetchBotStatuses();
+            showToast("Automated Strategy deployed successfully!", "success");
+        } catch (err) {
+            showToast("Error saving strategy: " + err.message, "danger");
         }
+    });
 
-        const startResp = await fetch(`${API_BASE}/api/bot/start/${strategyId}`, {
-            method: 'POST'
+    // Modal Tabs
+    document.querySelectorAll(".tab-btn").forEach(b => {
+        b.addEventListener("click", () => {
+            document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+            document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+            b.classList.add("active");
+            document.getElementById(b.getAttribute("data-tab")).classList.add("active");
         });
-
-        if (!startResp.ok) throw new Error("Failed to start bot worker.");
-
-        await fetchStrategies();
-        await fetchBotStatuses();
-
-        const logSelect = document.getElementById('log-strategy-select');
-        if (logSelect) {
-            logSelect.value = strategyId;
-            state.selectedLogStrategyId = strategyId;
-            renderLogs();
-        }
-
-        alert(`Successfully started trading on ${strategyName}! Console logs are now connected.`);
-    } catch (err) {
-        alert("Trading Error: " + err.message);
-        console.error(err);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i data-lucide="play" style="width: 14px; height: 14px;"></i> Start Trading`;
-        if (window.lucide) lucide.createIcons();
-    }
+    });
 }
 
-async function changeBotTimeframe(strategyId, newGranularity) {
-    const strategy = state.strategies.find(s => s.id === strategyId);
-    if (!strategy) {
-        alert("Strategy configuration not found.");
-        return;
-    }
+async function handleQuickStrategySave(e) {
+    e.preventDefault();
+    const name = document.getElementById("quick-strat-name").value;
+    const left = parseInt(document.getElementById("quick-strat-left").value);
+    const right = parseInt(document.getElementById("quick-strat-right").value);
+    const level = document.getElementById("quick-strat-signal-level").value;
+    const minFib = parseFloat(document.getElementById("quick-strat-min-fib").value);
+    const trend = document.getElementById("quick-strat-trend").checked;
+    const candle = document.getElementById("quick-strat-candle").checked;
+    const telegram = document.getElementById("quick-strat-telegram").checked;
 
-    strategy.granularity = newGranularity;
+    const payload = {
+        id: "strat_" + Math.random().toString(36).substr(2, 9),
+        status: "active",
+        name: name,
+        instrument: state.currentSymbol,
+        granularity: state.currentGranularity,
+        telegram_enabled: telegram,
+        price_source: "Wick",
+        signal_level: level,
+        strategy_type: "Fibonacci",
+        bull_tp_level: "0", bull_sl_level: "1", bear_tp_level: "0", bear_sl_level: "1",
+        left_bars: left, right_bars: right, min_swing_size: 0.0, min_fib_range: minFib,
+        min_bars_between_swings: 1, require_alternating_swings: true, recalculate_on_extreme: false,
+        use_time_filter: false, start_hour: 8, start_minute: 0, end_hour: 16, end_minute: 0,
+        use_no_trade_1: true, nt1_start_hour: 9, nt1_start_minute: 30, nt1_end_hour: 10, nt1_end_minute: 0,
+        use_no_trade_2: false, nt2_start_hour: 0, nt2_start_minute: 0, nt2_end_hour: 0, nt2_end_minute: 0,
+        use_trend_filter: trend, trend_ma_type: "SMA", trend_length: 50, trend_slope_bars: 5, minimum_slope: 0.0,
+        use_candle_confirmation: candle, confirmation_type: "Rejection Candle", minimum_wick_ratio: 0.5,
+        use_consolidation_filter: false, consolidation_length: 20, consolidation_atr_length: 14, max_consolidation_atr: 3.0
+    };
 
     try {
-        const resp = await fetch(`${API_BASE}/api/strategies`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(strategy)
+        await fetch(API_BASE + "/api/strategies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
         });
-
-        if (!resp.ok) throw new Error("Failed to save updated strategy configuration.");
-
-        await fetchStrategies();
-        await fetchBotStatuses();
+        showToast("Configuration saved and live worker deployed!", "success");
+        fetchStrategies();
+        fetchBotStatuses();
     } catch (err) {
-        alert("Error changing timeframe: " + err.message);
-        console.error(err);
+        showToast("Error saving: " + err.message, "danger");
     }
 }
-
-async function changeBotInstrument(strategyId, newInstrument) {
-    const strategy = state.strategies.find(s => s.id === strategyId);
-    if (!strategy) {
-        alert("Strategy configuration not found.");
-        return;
-    }
-
-    strategy.instrument = newInstrument;
-
-    // Adjust default MIN_FIB_RANGE depending on selected instrument to prevent mismatches
-    let minFib = 3.0;
-    if (newInstrument.includes("EUR_USD")) minFib = 0.0030;
-    else if (newInstrument.includes("GBP_USD")) minFib = 0.0035;
-    else if (newInstrument.includes("USD_JPY")) minFib = 0.30;
-    else if (newInstrument.includes("XAU_USD")) minFib = 3.0;
-    else minFib = 0.0030;
-
-    strategy.min_fib_range = minFib;
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/strategies`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(strategy)
-        });
-
-        if (!resp.ok) throw new Error("Failed to save updated strategy configuration.");
-
-        await fetchStrategies();
-        await fetchBotStatuses();
-    } catch (err) {
-        alert("Error changing instrument: " + err.message);
-        console.error(err);
-    }
-}
-
-

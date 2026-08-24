@@ -33,67 +33,11 @@ def map_granularity(granularity: str) -> str:
     }
     return mapping.get(granularity, granularity)
 
-def generate_mock_candles(instrument: str, count: int, interval: str) -> pd.DataFrame:
-    """Generates synthetic price data for fallback when Twelve Data API is rate-limited."""
-    import numpy as np
-    print(f"[Twelve Data Fallback] Generating synthetic price data for {instrument} ({interval})...")
-    
-    # Establish realistic baseline prices
-    if "EUR" in instrument:
-        base_price = 1.1200
-        pip_scale = 0.0001
-    elif "GBP" in instrument:
-        base_price = 1.3000
-        pip_scale = 0.0001
-    elif "JPY" in instrument:
-        base_price = 150.00
-        pip_scale = 0.01
-    elif "XAU" in instrument:
-        base_price = 2500.00
-        pip_scale = 0.2
-    else:
-        base_price = 100.00
-        pip_scale = 0.01
-
-    now = pd.Timestamp.now(tz="UTC")
-    delta = INTERVAL_TIMEDELTA.get(interval, pd.Timedelta(minutes=15))
-    times = [now - (count - i) * delta for i in range(count)]
-
-    # Deterministic seed based on symbol name to make synthetic chart consistent
-    seed = sum(ord(c) for c in instrument)
-    np.random.seed(seed)
-    
-    prices = [base_price]
-    for _ in range(count - 1):
-        # random walk
-        change = np.random.normal(0, 15 * pip_scale)
-        prices.append(max(base_price * 0.2, prices[-1] + change))
-
-    rows = []
-    for i, t in enumerate(times):
-        close_p = prices[i]
-        open_p = prices[i-1] if i > 0 else close_p - np.random.normal(0, pip_scale)
-        high_p = max(open_p, close_p) + abs(np.random.normal(0, 4 * pip_scale))
-        low_p = min(open_p, close_p) - abs(np.random.normal(0, 4 * pip_scale))
-        # Add random volume
-        vol = float(np.random.randint(100, 2000))
-        rows.append({
-            "time": t,
-            "open": round(open_p, 5),
-            "high": round(high_p, 5),
-            "low": round(low_p, 5),
-            "close": round(close_p, 5),
-            "volume": vol,
-        })
-
-    df = pd.DataFrame(rows)
-    return df
-
 def get_candles(instrument: str, count: int = None, granularity: str = None, force_refresh: bool = False) -> pd.DataFrame:
     """
-    Returns a DataFrame of *completed* candles from Twelve Data, oldest -> newest,
-    columns: time (tz-aware UTC), open, high, low, close.
-    Uses local cache file if available and fresh. Falls back to mock data if API limits hit.
+    Returns a DataFrame of *completed* authentic candles from Twelve Data, oldest -> newest,
+    columns: time (tz-aware UTC), open, high, low, close, volume.
+    Uses local cache file if available and fresh.
     """
     count = count or cfg.CANDLE_HISTORY_COUNT
     granularity = granularity or cfg.GRANULARITY
@@ -130,7 +74,7 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
             cache_valid = True
 
     if cache_valid and cache_df is not None:
-        print(f"[Cache] Slicing last {count} candles for {instrument} ({interval}) from cache.")
+        print(f"[Cache] Slicing last {count} authentic candles for {instrument} ({interval}) from cache.")
         df = cache_df.tail(count).copy().reset_index(drop=True)
         # Drop forming candle
         delta = INTERVAL_TIMEDELTA.get(interval)
@@ -140,7 +84,7 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
                 df = df.iloc[:-1].copy()
         return df
 
-    # Otherwise, fetch from API
+    # Otherwise, fetch authentic real-time/historical candles from Twelve Data API
     url = "https://api.twelvedata.com/time_series"
     fetch_count = max(count, 500) # Fetch at least 500 to build cache
     params = {
@@ -151,11 +95,12 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
         "order": "ASC",
     }
 
-    max_retries = 5
-    retry_delay = 12  # seconds to wait when rate limited
+    max_retries = 3
+    retry_delay = 10  # seconds to wait when rate limited
 
     api_success = False
     data = {}
+    last_error_msg = ""
 
     for attempt in range(max_retries):
         try:
@@ -163,7 +108,6 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
                 resp = requests.get(url, params=params, timeout=15)
                 resp.raise_for_status()
             except requests.exceptions.SSLError:
-                # Fallback if host system has SSL verification issues
                 import urllib3
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                 resp = requests.get(url, params=params, timeout=15, verify=False)
@@ -171,11 +115,11 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
 
             data = resp.json()
 
-            # Twelve Data API can return 200 OK with status="error" when rate limits are exceeded
             if data.get("status") == "error":
                 message = data.get("message", "")
+                last_error_msg = message
                 if "limit" in message.lower() or "speed" in message.lower() or "many requests" in message.lower():
-                    print(f"[Twelve Data] Rate limit hit: {message}. Retrying in {retry_delay}s... (Attempt {attempt+1}/{max_retries})")
+                    print(f"[Twelve Data] Rate limit: {message}. Retrying in {retry_delay}s... (Attempt {attempt+1}/{max_retries})")
                     time.sleep(retry_delay)
                     continue
                 else:
@@ -185,8 +129,9 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
                 raise RuntimeError(f"Unexpected Twelve Data response: {data}")
 
             api_success = True
-            break  # Success!
+            break
         except requests.exceptions.HTTPError as e:
+            last_error_msg = str(e)
             if e.response is not None and e.response.status_code == 429:
                 print(f"[Twelve Data] HTTP 429 Rate limit hit. Retrying in {retry_delay}s... (Attempt {attempt+1}/{max_retries})")
                 time.sleep(retry_delay)
@@ -194,24 +139,16 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
             print(f"[Twelve Data] HTTP Error: {e}")
             break
         except Exception as e:
+            last_error_msg = str(e)
             print(f"[Twelve Data] Network/Request Error: {e}")
             break
 
     if not api_success:
-        print("[Twelve Data] API request failed. Checking fallbacks...")
-        if cache_df is not None:
-            print(f"[Twelve Data Fallback] Returning existing cache data ({len(cache_df)} rows).")
+        if cache_df is not None and len(cache_df) > 0:
+            print(f"[Twelve Data] API failed ({last_error_msg}). Falling back to existing cached real data ({len(cache_df)} rows).")
             df = cache_df.tail(count).copy().reset_index(drop=True)
             return df
-        else:
-            # Generate synthetic data if no cache exists
-            df = generate_mock_candles(instrument, fetch_count, interval)
-            # Save mock to cache file
-            try:
-                df.to_csv(cache_file, index=False)
-            except:
-                pass
-            return df.tail(count).copy().reset_index(drop=True)
+        raise RuntimeError(f"Twelve Data API error: {last_error_msg or 'Failed to fetch real market data'}")
 
     rows = []
     for candle in data.get("values", []):

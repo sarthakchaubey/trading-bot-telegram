@@ -451,14 +451,23 @@ def get_signals():
     except:
         return []
 
+def get_pip_scale(instrument: str) -> float:
+    """Returns pip scale factor for pip calculations."""
+    if "JPY" in instrument:
+        return 0.01
+    elif "XAU" in instrument or "XAG" in instrument:
+        return 1.0
+    return 0.0001
+
 # ============================================================================
-# Backtester Simulator Implementation
+# Backtester Simulator Implementation (Real Market Simulation)
 # ============================================================================
-def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
+def simulate_trades(df: pd.DataFrame, events: List[Event], instrument: str = "EUR_USD") -> tuple:
     simulated = []
     wins = 0
     losses = 0
     total_pnl_pct = 0.0
+    pip_scale = get_pip_scale(instrument)
 
     # Map timestamps to index for fast O(1) loop iteration index resolution
     time_to_idx = {row["time"]: idx for idx, row in df.iterrows()}
@@ -474,13 +483,26 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
         pnl_points = 0.0
         pnl_pct = 0.0
 
-        # Run state machine simulator forward
-        for idx in range(start_idx, len(df)):
+        # Calculate Risk-Reward Ratio
+        if e.kind == "BUY":
+            risk = e.price - e.sl
+            reward = e.tp - e.price
+        else:
+            risk = e.sl - e.price
+            reward = e.price - e.tp
+        rrr = (reward / risk) if risk > 0 else 0.0
+
+        # Run forward trade simulation strictly starting from the subsequent candle (start_idx + 1)
+        # to eliminate within-candle retrospective lookahead bias
+        for idx in range(start_idx + 1, len(df)):
             row = df.iloc[idx]
             h, l, c = row["high"], row["low"], row["close"]
 
             if e.kind == "BUY":
-                if l <= e.sl:
+                hit_tp = h >= e.tp
+                hit_sl = l <= e.sl
+                if hit_tp and hit_sl:
+                    # Intrabar collision: assume conservative Stop-Loss first
                     outcome = "LOSS"
                     exit_price = e.sl
                     exit_time = row["time"]
@@ -488,7 +510,7 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
                     pnl_pct = (pnl_points / e.price) * 100.0
                     losses += 1
                     break
-                elif h >= e.tp:
+                elif hit_tp:
                     outcome = "WIN"
                     exit_price = e.tp
                     exit_time = row["time"]
@@ -496,8 +518,19 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
                     pnl_pct = (pnl_points / e.price) * 100.0
                     wins += 1
                     break
+                elif hit_sl:
+                    outcome = "LOSS"
+                    exit_price = e.sl
+                    exit_time = row["time"]
+                    pnl_points = e.sl - e.price
+                    pnl_pct = (pnl_points / e.price) * 100.0
+                    losses += 1
+                    break
             else:  # SELL
-                if h >= e.sl:
+                hit_tp = l <= e.tp
+                hit_sl = h >= e.sl
+                if hit_tp and hit_sl:
+                    # Intrabar collision: assume conservative Stop-Loss first
                     outcome = "LOSS"
                     exit_price = e.sl
                     exit_time = row["time"]
@@ -505,7 +538,7 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
                     pnl_pct = (pnl_points / e.price) * 100.0
                     losses += 1
                     break
-                elif l <= e.tp:
+                elif hit_tp:
                     outcome = "WIN"
                     exit_price = e.tp
                     exit_time = row["time"]
@@ -513,8 +546,19 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
                     pnl_pct = (pnl_points / e.price) * 100.0
                     wins += 1
                     break
+                elif hit_sl:
+                    outcome = "LOSS"
+                    exit_price = e.sl
+                    exit_time = row["time"]
+                    pnl_points = e.price - e.sl
+                    pnl_pct = (pnl_points / e.price) * 100.0
+                    losses += 1
+                    break
         else:
-            # Trade is still open at current bar close
+            # Trade remains open at the most recent candle close
+            outcome = "OPEN"
+            exit_price = df.iloc[-1]["close"]
+            exit_time = df.iloc[-1]["time"]
             if e.kind == "BUY":
                 pnl_points = exit_price - e.price
             else:
@@ -522,6 +566,8 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
             pnl_pct = (pnl_points / e.price) * 100.0
 
         total_pnl_pct += pnl_pct
+        pips = pnl_points / pip_scale
+
         simulated.append({
             "type": e.kind,
             "entry_time": e.time.strftime('%Y-%m-%d %H:%M UTC'),
@@ -533,6 +579,8 @@ def simulate_trades(df: pd.DataFrame, events: List[Event]) -> tuple:
             "outcome": outcome,
             "pnl_points": float(pnl_points),
             "pnl_pct": float(pnl_pct),
+            "pips": float(pips),
+            "rrr": float(rrr),
             "cumulative_pnl_pct": float(total_pnl_pct)
         })
 
@@ -546,25 +594,25 @@ def run_backtest(req: BacktestRequestSchema):
         raise HTTPException(status_code=404, detail="Strategy config not found.")
 
     # Apply instrument and granularity overrides if provided
-    if req.instrument:
-        new_inst = req.instrument
-        if new_inst != strat.get("instrument"):
-            min_fib = 3.0
-            if "EUR_USD" in new_inst:
-                min_fib = 0.0030
-            elif "GBP_USD" in new_inst:
-                min_fib = 0.0035
-            elif "USD_JPY" in new_inst:
-                min_fib = 0.30
-            elif "XAU_USD" in new_inst:
-                min_fib = 3.0
-            else:
-                min_fib = 0.0030
-            strat["min_fib_range"] = min_fib
-        strat["instrument"] = new_inst
+    target_instrument = req.instrument or strat.get("instrument", "EUR_USD")
+    target_granularity = req.granularity or strat.get("granularity", "M15")
 
-    if req.granularity:
-        strat["granularity"] = req.granularity
+    strat["instrument"] = target_instrument
+    strat["granularity"] = target_granularity
+
+    # Adjust default minimum fib range if instrument changed
+    min_fib = 3.0
+    if "EUR_USD" in target_instrument:
+        min_fib = 0.0030
+    elif "GBP_USD" in target_instrument:
+        min_fib = 0.0035
+    elif "USD_JPY" in target_instrument:
+        min_fib = 0.30
+    elif "XAU_USD" in target_instrument:
+        min_fib = 3.0
+    else:
+        min_fib = 0.0030
+    strat["min_fib_range"] = min_fib
 
     class ConfigMock:
         pass
@@ -577,17 +625,18 @@ def run_backtest(req: BacktestRequestSchema):
             
     for k, v in strat.items():
         setattr(cfg_mock, k.upper(), v)
+        setattr(cfg_mock, k.lower(), v)
         
-    cfg_mock._current_instrument = strat["instrument"]
+    cfg_mock._current_instrument = target_instrument
     cfg_mock.MIN_FIB_RANGE_OVERRIDES = {}
     cfg_mock.CANDLE_HISTORY_COUNT = req.count
 
     try:
-        # Fetch candles
+        # Fetch authentic real market candles from Twelve Data
         df = twelvedata_feed.get_candles(
-            strat["instrument"],
+            target_instrument,
             count=req.count,
-            granularity=strat["granularity"],
+            granularity=target_granularity,
             force_refresh=req.force_refresh
         )
         
@@ -602,7 +651,7 @@ def run_backtest(req: BacktestRequestSchema):
         else:
             events = fib_strategy.run_strategy(df, cfg_mock)
 
-        trades, wins, losses = simulate_trades(df, events)
+        trades, wins, losses = simulate_trades(df, events, target_instrument)
 
         # Calculate metrics
         total_trades = len(trades)
@@ -610,7 +659,13 @@ def run_backtest(req: BacktestRequestSchema):
         closed_trades = total_trades - open_trades
         win_rate = (wins / closed_trades * 100) if closed_trades > 0 else 0
         net_profit_pct = sum(t["pnl_pct"] for t in trades)
+        net_pips = sum(t["pips"] for t in trades)
         
+        # Profit Factor
+        gross_profit_points = sum(t["pnl_points"] for t in trades if t["outcome"] == "WIN")
+        gross_loss_points = abs(sum(t["pnl_points"] for t in trades if t["outcome"] == "LOSS"))
+        profit_factor = (gross_profit_points / gross_loss_points) if gross_loss_points > 0 else (99.0 if gross_profit_points > 0 else 0.0)
+
         # Max drawdown based on cumulative PnL
         max_drawdown = 0.0
         peak = 0.0
@@ -619,7 +674,7 @@ def run_backtest(req: BacktestRequestSchema):
             drawdown = peak - t["cumulative_pnl_pct"]
             max_drawdown = max(max_drawdown, drawdown)
 
-        # Format price history for chart rendering
+        # Format real price history for chart rendering
         chart_candles = []
         for _, row in df.iterrows():
             chart_candles.append({
@@ -632,8 +687,13 @@ def run_backtest(req: BacktestRequestSchema):
 
         return {
             "strategy": strat["name"],
-            "instrument": strat["instrument"],
-            "granularity": strat["granularity"],
+            "instrument": target_instrument,
+            "granularity": target_granularity,
+            "period": {
+                "start": df.iloc[0]["time"].strftime('%Y-%m-%d %H:%M UTC'),
+                "end": df.iloc[-1]["time"].strftime('%Y-%m-%d %H:%M UTC'),
+                "bars": len(df)
+            },
             "metrics": {
                 "total_trades": total_trades,
                 "wins": wins,
@@ -641,6 +701,8 @@ def run_backtest(req: BacktestRequestSchema):
                 "open_trades": open_trades,
                 "win_rate": round(win_rate, 2),
                 "net_profit_pct": round(net_profit_pct, 4),
+                "net_pips": round(net_pips, 1),
+                "profit_factor": round(profit_factor, 2),
                 "max_drawdown_pct": round(max_drawdown, 4)
             },
             "trades": trades,
@@ -649,6 +711,48 @@ def run_backtest(req: BacktestRequestSchema):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Backtest execution error: {str(e)}")
+
+@app.get("/api/quotes")
+def get_live_quotes():
+    """Provides current price, change, and 24h summary for watchlist tickers."""
+    watchlist_symbols = ["EUR_USD", "GBP_USD", "USD_JPY", "XAU_USD"]
+    quotes = []
+    
+    for symbol in watchlist_symbols:
+        try:
+            df = twelvedata_feed.get_candles(symbol, count=2, granularity="M15", force_refresh=False)
+            if not df.empty and len(df) >= 1:
+                latest = df.iloc[-1]
+                prev = df.iloc[-2] if len(df) >= 2 else latest
+                current_price = float(latest["close"])
+                prev_price = float(prev["close"])
+                change = current_price - prev_price
+                change_pct = (change / prev_price * 100.0) if prev_price > 0 else 0.0
+                
+                quotes.append({
+                    "symbol": symbol,
+                    "display": symbol.replace("_", "/"),
+                    "price": current_price,
+                    "change": round(change, 5),
+                    "change_pct": round(change_pct, 2),
+                    "high": float(latest["high"]),
+                    "low": float(latest["low"]),
+                    "volume": float(latest.get("volume", 0) or 0),
+                    "time": latest["time"].strftime('%H:%M:%S UTC')
+                })
+        except Exception as e:
+            quotes.append({
+                "symbol": symbol,
+                "display": symbol.replace("_", "/"),
+                "price": 0.0,
+                "change": 0.0,
+                "change_pct": 0.0,
+                "high": 0.0,
+                "low": 0.0,
+                "volume": 0.0,
+                "time": "Error"
+            })
+    return quotes
 
 @app.post("/api/analyze")
 def analyze_chart(req: AnalyzeRequestSchema):
@@ -705,36 +809,79 @@ def analyze_chart(req: AnalyzeRequestSchema):
             events = fib_strategy.run_strategy(df, cfg_mock)
 
         chart_candles = []
+        volume_series = []
         for _, row in df.iterrows():
+            unix_time = int(row["time"].timestamp())
+            o, h, l, c = float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"])
+            v = float(row.get("volume", 0) or 0)
+            
             chart_candles.append({
-                "time": row["time"].strftime('%Y-%m-%d %H:%M UTC'),
-                "open": float(row["open"]),
-                "high": float(row["high"]),
-                "low": float(row["low"]),
-                "close": float(row["close"])
+                "time": unix_time,
+                "datetime": row["time"].strftime('%Y-%m-%d %H:%M UTC'),
+                "open": o,
+                "high": h,
+                "low": l,
+                "close": c,
+                "volume": v
+            })
+            
+            volume_series.append({
+                "time": unix_time,
+                "value": v,
+                "color": "rgba(8, 153, 129, 0.35)" if c >= o else "rgba(242, 54, 69, 0.35)"
             })
 
         signals = []
         for e in events:
             signals.append({
                 "kind": e.kind,
-                "time": e.time.strftime('%Y-%m-%d %H:%M UTC'),
+                "time": int(e.time.timestamp()),
+                "datetime": e.time.strftime('%Y-%m-%d %H:%M UTC'),
                 "price": float(e.price),
                 "tp": float(e.tp) if e.tp else None,
-                "sl": float(e.sl) if e.sl else None
+                "sl": float(e.sl) if e.sl else None,
+                "fib_low": float(e.fib_low) if hasattr(e, 'fib_low') else None,
+                "fib_high": float(e.fib_high) if hasattr(e, 'fib_high') else None
             })
 
         reasoning = None
         if req.strategy_type == "AIClaude":
             reasoning = ai_strategy.get_last_reasoning()
 
+        latest_close = float(df.iloc[-1]["close"])
+        prev_close = float(df.iloc[-2]["close"]) if len(df) >= 2 else latest_close
+        price_diff = latest_close - prev_close
+        price_diff_pct = (price_diff / prev_close * 100.0) if prev_close > 0 else 0.0
+
+        # Latest Fib bounds if applicable
+        last_event = events[-1] if events else None
+        fib_bounds = None
+        if last_event and hasattr(last_event, 'fib_low') and last_event.fib_low > 0:
+            fib_bounds = {
+                "low": last_event.fib_low,
+                "high": last_event.fib_high,
+                "tp": last_event.tp,
+                "sl": last_event.sl
+            }
+
         return {
             "instrument": req.instrument,
+            "display_symbol": req.instrument.replace("_", "/"),
             "granularity": req.granularity,
             "strategy_type": req.strategy_type,
             "candles": chart_candles,
+            "volume": volume_series,
             "signals": signals,
-            "reasoning": reasoning
+            "reasoning": reasoning,
+            "fib_bounds": fib_bounds,
+            "market_summary": {
+                "price": latest_close,
+                "change": round(price_diff, 5),
+                "change_pct": round(price_diff_pct, 2),
+                "high": float(df["high"].max()),
+                "low": float(df["low"].min()),
+                "bars": len(df)
+            }
         }
     except Exception as e:
         traceback.print_exc()
