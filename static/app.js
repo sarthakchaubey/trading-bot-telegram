@@ -123,12 +123,12 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchBotStatuses();
     loadMainChartData();
 
-    // 9. Start Polling Loop (every 5 seconds)
+    // 9. Start Polling Loop (every 30 seconds)
     state.pollInterval = setInterval(() => {
         fetchQuotes();
         fetchSignals();
         fetchBotStatuses();
-    }, 5000);
+    }, 30000);
 
     showToast("TradingView Hub loaded & synced to Twelve Data.", "success");
 });

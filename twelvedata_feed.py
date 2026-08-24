@@ -33,6 +33,45 @@ def map_granularity(granularity: str) -> str:
     }
     return mapping.get(granularity, granularity)
 
+def resample_candles(df: pd.DataFrame, target_interval: str) -> pd.DataFrame:
+    """Resamples a DataFrame of candles to a larger target interval (e.g. 15min -> 30min)."""
+    if df.empty:
+        return df
+    
+    # Map Twelve Data intervals to pandas resampling frequencies
+    resample_freqs = {
+        "1min": "1min",
+        "5min": "5min",
+        "15min": "15min",
+        "30min": "30min",
+        "1h": "1h",
+        "4h": "4h",
+        "1day": "1D"
+    }
+    
+    freq = resample_freqs.get(target_interval)
+    if not freq:
+        return df
+        
+    try:
+        # Copy to avoid modifying original index
+        temp_df = df.copy()
+        temp_df = temp_df.set_index("time")
+        
+        # Resample OHLCV
+        resampled = temp_df.resample(freq).agg({
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum"
+        }).dropna().reset_index()
+        
+        return resampled
+    except Exception as e:
+        print(f"[Resample] Error resampling candles to {target_interval}: {e}")
+        return df
+
 def get_candles(instrument: str, count: int = None, granularity: str = None, force_refresh: bool = False, stop_event=None) -> pd.DataFrame:
     """
     Returns a DataFrame of *completed* authentic candles from Twelve Data, oldest -> newest,
@@ -68,8 +107,8 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
     cache_valid = False
     if not force_refresh and cache_df is not None and len(cache_df) >= count:
         file_age = time.time() - os.path.getmtime(cache_file)
-        # 1 hour for backtesting (large count), 30 seconds for live polling
-        max_age = 3600 if count >= 300 else 30
+        # 1 hour for backtesting (large count), 90 seconds for live polling
+        max_age = 3600 if count >= 300 else 90
         if file_age < max_age:
             cache_valid = True
 
@@ -149,11 +188,32 @@ def get_candles(instrument: str, count: int = None, granularity: str = None, for
             print(f"[Twelve Data] Network/Request Error: {e}")
             break
 
+
     if not api_success:
         if cache_df is not None and len(cache_df) > 0:
             print(f"[Twelve Data] API failed ({last_error_msg}). Falling back to existing cached real data ({len(cache_df)} rows).")
             df = cache_df.tail(count).copy().reset_index(drop=True)
             return df
+        
+        # Try fallback to 15min cache and resample!
+        fallback_file = os.path.join(CACHE_DIR, f"{instrument}_15min.csv")
+        if os.path.exists(fallback_file):
+            try:
+                print(f"[Twelve Data] API failed. Attempting resample fallback from 15min cache for {instrument} to {interval}...")
+                fallback_df = pd.read_csv(fallback_file)
+                fallback_df["time"] = pd.to_datetime(fallback_df["time"])
+                if fallback_df["time"].dt.tz is None:
+                    fallback_df["time"] = fallback_df["time"].dt.tz_localize("UTC")
+                else:
+                    fallback_df["time"] = fallback_df["time"].dt.tz_convert("UTC")
+                if "volume" not in fallback_df.columns:
+                    fallback_df["volume"] = 0.0
+                
+                df = resample_candles(fallback_df, interval)
+                return df.tail(count).copy().reset_index(drop=True)
+            except Exception as fe:
+                print(f"[Twelve Data] Fallback resample failed: {fe}")
+                
         raise RuntimeError(f"Twelve Data API error: {last_error_msg or 'Failed to fetch real market data'}")
 
     rows = []
