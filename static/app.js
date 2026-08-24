@@ -1439,33 +1439,90 @@ function setupModalsEvents() {
 async function handleQuickStrategySave(e) {
     e.preventDefault();
     const name = document.getElementById("quick-strat-name").value;
-    const left = parseInt(document.getElementById("quick-strat-left").value);
-    const right = parseInt(document.getElementById("quick-strat-right").value);
-    const level = document.getElementById("quick-strat-signal-level").value;
-    const minFib = parseFloat(document.getElementById("quick-strat-min-fib").value);
-    const trend = document.getElementById("quick-strat-trend").checked;
-    const candle = document.getElementById("quick-strat-candle").checked;
+    const type = document.getElementById("quick-strat-type").value;
+    const instrument = document.getElementById("quick-strat-instrument").value;
+    const granularity = document.getElementById("quick-strat-granularity").value;
+    const priceSource = document.getElementById("quick-strat-price-source").value;
     const telegram = document.getElementById("quick-strat-telegram").checked;
+
+    const left = parseInt(document.getElementById("quick-strat-left").value) || 5;
+    const right = parseInt(document.getElementById("quick-strat-right").value) || 5;
+    const level = document.getElementById("quick-strat-signal-level").value;
+    const minFib = parseFloat(document.getElementById("quick-strat-min-fib").value) || 0.0030;
+    
+    const bullTp = document.getElementById("quick-strat-bull-tp").value;
+    const bullSl = document.getElementById("quick-strat-bull-sl").value;
+    const bearTp = document.getElementById("quick-strat-bear-tp").value;
+    const bearSl = document.getElementById("quick-strat-bear-sl").value;
+    
+    const requireAlt = document.getElementById("quick-strat-require-alt").checked;
+    const recalcExtreme = document.getElementById("quick-strat-recalc-extreme").checked;
+
+    const useTrend = document.getElementById("quick-strat-use-trend").checked;
+    const trendLen = parseInt(document.getElementById("quick-strat-trend-len").value) || 50;
+    const trendMaType = document.getElementById("quick-strat-trend-ma-type").value;
+
+    const useCandle = document.getElementById("quick-strat-use-candle").checked;
+    const candleType = document.getElementById("quick-strat-candle-type").value;
+    const wickRatio = parseFloat(document.getElementById("quick-strat-wick-ratio").value) || 0.5;
+
+    const useTimeFilter = document.getElementById("quick-strat-use-time-filter").checked;
+    const startHour = parseInt(document.getElementById("quick-strat-start-hour").value) || 8;
+    const startMinute = parseInt(document.getElementById("quick-strat-start-minute").value) || 0;
+    const endHour = parseInt(document.getElementById("quick-strat-end-hour").value) || 16;
+    const endMinute = parseInt(document.getElementById("quick-strat-end-minute").value) || 0;
+
+    const useNt1 = document.getElementById("quick-strat-use-nt1").checked;
+    const useConsolidation = document.getElementById("quick-strat-use-consolidation").checked;
 
     const payload = {
         id: "strat_" + Math.random().toString(36).substr(2, 9),
         status: "active",
         name: name,
-        instrument: state.currentSymbol,
-        granularity: state.currentGranularity,
+        instrument: instrument,
+        granularity: granularity,
         telegram_enabled: telegram,
-        price_source: "Wick",
+        price_source: priceSource,
         signal_level: level,
-        strategy_type: "Fibonacci",
-        bull_tp_level: "0", bull_sl_level: "1", bear_tp_level: "0", bear_sl_level: "1",
-        left_bars: left, right_bars: right, min_swing_size: 0.0, min_fib_range: minFib,
-        min_bars_between_swings: 1, require_alternating_swings: true, recalculate_on_extreme: false,
-        use_time_filter: false, start_hour: 8, start_minute: 0, end_hour: 16, end_minute: 0,
-        use_no_trade_1: true, nt1_start_hour: 9, nt1_start_minute: 30, nt1_end_hour: 10, nt1_end_minute: 0,
-        use_no_trade_2: false, nt2_start_hour: 0, nt2_start_minute: 0, nt2_end_hour: 0, nt2_end_minute: 0,
-        use_trend_filter: trend, trend_ma_type: "SMA", trend_length: 50, trend_slope_bars: 5, minimum_slope: 0.0,
-        use_candle_confirmation: candle, confirmation_type: "Rejection Candle", minimum_wick_ratio: 0.5,
-        use_consolidation_filter: false, consolidation_length: 20, consolidation_atr_length: 14, max_consolidation_atr: 3.0
+        strategy_type: type,
+        bull_tp_level: bullTp,
+        bull_sl_level: bullSl,
+        bear_tp_level: bearTp,
+        bear_sl_level: bearSl,
+        left_bars: left,
+        right_bars: right,
+        min_swing_size: 0.0,
+        min_fib_range: minFib,
+        min_bars_between_swings: 1,
+        require_alternating_swings: requireAlt,
+        recalculate_on_extreme: recalcExtreme,
+        use_time_filter: useTimeFilter,
+        start_hour: startHour,
+        start_minute: startMinute,
+        end_hour: endHour,
+        end_minute: endMinute,
+        use_no_trade_1: useNt1,
+        nt1_start_hour: 9,
+        nt1_start_minute: 30,
+        nt1_end_hour: 10,
+        nt1_end_minute: 0,
+        use_no_trade_2: false,
+        nt2_start_hour: 0,
+        nt2_start_minute: 0,
+        nt2_end_hour: 0,
+        nt2_end_minute: 0,
+        use_trend_filter: useTrend,
+        trend_ma_type: trendMaType,
+        trend_length: trendLen,
+        trend_slope_bars: 5,
+        minimum_slope: 0.0,
+        use_candle_confirmation: useCandle,
+        confirmation_type: candleType,
+        minimum_wick_ratio: wickRatio,
+        use_consolidation_filter: useConsolidation,
+        consolidation_length: 20,
+        consolidation_atr_length: 14,
+        max_consolidation_atr: 3.0
     };
 
     try {
