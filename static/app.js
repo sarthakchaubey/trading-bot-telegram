@@ -857,6 +857,8 @@ function renderReplayStep() {
     state.candlestickSeries.setData(subset);
     
     document.getElementById("replay-bar-info").textContent = "Bar " + state.replayIndex + " / " + state.currentCandles.length;
+    const infoEl = document.getElementById("replay-bar-info");
+    if (infoEl) infoEl.textContent = "Bar " + state.replayIndex + " / " + state.currentCandles.length;
     if (subset.length > 0) {
         updateLegendValues(subset[subset.length - 1]);
     }
@@ -873,39 +875,68 @@ function setupSidebarEvents() {
             document.querySelectorAll(".tv-pane").forEach(p => p.classList.remove("active"));
             tab.classList.add("active");
             const targetId = tab.getAttribute("data-tab");
-            document.getElementById(targetId).classList.add("active");
+            const targetPane = document.getElementById(targetId);
+            if (targetPane) targetPane.classList.add("active");
         });
     });
 
     // Refresh quotes button
-    document.getElementById("btn-refresh-quotes").addEventListener("click", () => {
-        fetchQuotes();
-        showToast("Live quotes updated.", "info");
-    });
+    const btnRefreshQuotes = document.getElementById("btn-refresh-quotes");
+    if (btnRefreshQuotes) {
+        btnRefreshQuotes.addEventListener("click", () => {
+            fetchQuotes();
+            showToast("Live quotes updated.", "info");
+        });
+    }
 
     // Quick Trade Buy/Sell buttons
-    document.getElementById("btn-order-buy").addEventListener("click", () => executeQuickTrade("BUY"));
-    document.getElementById("btn-order-sell").addEventListener("click", () => executeQuickTrade("SELL"));
-    document.getElementById("btn-execute-trade-order").addEventListener("click", () => executeQuickTrade("BUY"));
+    const btnOrderBuy = document.getElementById("btn-order-buy");
+    if (btnOrderBuy) {
+        btnOrderBuy.addEventListener("click", () => executeQuickTrade("BUY"));
+    }
+    const btnOrderSell = document.getElementById("btn-order-sell");
+    if (btnOrderSell) {
+        btnOrderSell.addEventListener("click", () => executeQuickTrade("SELL"));
+    }
+    const btnExecuteTradeOrder = document.getElementById("btn-execute-trade-order");
+    if (btnExecuteTradeOrder) {
+        btnExecuteTradeOrder.addEventListener("click", () => executeQuickTrade("BUY"));
+    }
 
     // Quick risk calculator update
-    document.getElementById("order-lots").addEventListener("input", updateOrderRiskReward);
-    document.getElementById("order-sl-pips").addEventListener("input", updateOrderRiskReward);
-    document.getElementById("order-tp-pips").addEventListener("input", updateOrderRiskReward);
+    const orderLots = document.getElementById("order-lots");
+    if (orderLots) {
+        orderLots.addEventListener("input", updateOrderRiskReward);
+    }
+    const orderSlPips = document.getElementById("order-sl-pips");
+    if (orderSlPips) {
+        orderSlPips.addEventListener("input", updateOrderRiskReward);
+    }
+    const orderTpPips = document.getElementById("order-tp-pips");
+    if (orderTpPips) {
+        orderTpPips.addEventListener("input", updateOrderRiskReward);
+    }
 
     // Sidebar AI Trigger
-    document.getElementById("btn-sidebar-trigger-ai").addEventListener("click", () => {
-        state.currentStrategyType = "AIClaude";
-        document.getElementById("tv-strategy-select").value = "AIClaude";
-        loadMainChartData();
-        showToast("Running Claude AI Market Analysis...", "info");
-    });
+    const btnSidebarTriggerAi = document.getElementById("btn-sidebar-trigger-ai");
+    if (btnSidebarTriggerAi) {
+        btnSidebarTriggerAi.addEventListener("click", () => {
+            state.currentStrategyType = "AIClaude";
+            const stratSelect = document.getElementById("tv-strategy-select");
+            if (stratSelect) stratSelect.value = "AIClaude";
+            loadMainChartData();
+            showToast("Running Claude AI Market Analysis...", "info");
+        });
+    }
 
     // Refresh bots
-    document.getElementById("btn-refresh-bots").addEventListener("click", () => {
-        fetchBotStatuses();
-        showToast("Refreshed active worker status.", "info");
-    });
+    const btnRefreshBots = document.getElementById("btn-refresh-bots");
+    if (btnRefreshBots) {
+        btnRefreshBots.addEventListener("click", () => {
+            fetchBotStatuses();
+            showToast("Refreshed active worker status.", "info");
+        });
+    }
 
     // Sidebar Strategy Configurator Form Submission
     const sidebarForm = document.getElementById("tv-sidebar-strategy-form");
@@ -983,7 +1014,8 @@ function setupBottomDockEvents() {
             document.querySelectorAll(".tv-dock-pane").forEach(p => p.classList.remove("active"));
             tab.classList.add("active");
             const targetId = tab.getAttribute("data-dock");
-            document.getElementById(targetId).classList.add("active");
+            const targetPane = document.getElementById(targetId);
+            if (targetPane) targetPane.classList.add("active");
         });
     });
 
@@ -992,19 +1024,30 @@ function setupBottomDockEvents() {
     const toggleBtn = document.getElementById("btn-dock-toggle-size");
     const collapseBtn = document.getElementById("btn-dock-collapse");
 
-    toggleBtn.addEventListener("click", () => {
-        dock.classList.remove("collapsed");
-        dock.classList.toggle("maximized");
-        if (state.chart) state.chart.timeScale().fitContent();
-    });
+    if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+            if (dock) {
+                dock.classList.remove("collapsed");
+                dock.classList.toggle("maximized");
+            }
+            if (state.chart) state.chart.timeScale().fitContent();
+        });
+    }
 
-    collapseBtn.addEventListener("click", () => {
-        dock.classList.toggle("collapsed");
-        dock.classList.remove("maximized");
-    });
+    if (collapseBtn) {
+        collapseBtn.addEventListener("click", () => {
+            if (dock) {
+                dock.classList.toggle("collapsed");
+                dock.classList.remove("maximized");
+            }
+        });
+    }
 
     // Run Backtest Trigger
-    document.getElementById("btn-dock-run-backtest").addEventListener("click", runDockBacktest);
+    const btnBacktest = document.getElementById("btn-dock-run-backtest");
+    if (btnBacktest) {
+        btnBacktest.addEventListener("click", runDockBacktest);
+    }
 
     // Pine Strategy Quick Form
     const quickForm = document.getElementById("tv-quick-strategy-form");
