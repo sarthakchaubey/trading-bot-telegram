@@ -460,6 +460,42 @@ body.tv-body {
     height: 14px;
 }
 
+/* ==========================================================================
+   RESPONSIVE TOPBAR OPTIMIZATION
+   ========================================================================== */
+@media (max-width: 1550px) {
+    .tv-symbol-exchange {
+        display: none;
+    }
+    .tv-tf-btn {
+        padding: 3px 5px;
+    }
+}
+
+@media (max-width: 1400px) {
+    .tv-divider-v:nth-of-type(3),
+    .tv-divider-v:nth-of-type(4) {
+        display: none;
+    }
+    .tv-action-pill span {
+        display: none;
+    }
+    .tv-tool-btn span {
+        display: none;
+    }
+    .tv-tf-btn[data-tf="M1"],
+    .tv-tf-btn[data-tf="M5"],
+    .tv-tf-btn[data-tf="M30"] {
+        display: none;
+    }
+}
+
+@media (max-width: 1200px) {
+    .tv-btn-primary span {
+        display: none;
+    }
+}
+
 /* Floating Replay Bar */
 .tv-replay-toolbar {
     position: absolute;
