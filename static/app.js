@@ -906,6 +906,12 @@ function setupSidebarEvents() {
         fetchBotStatuses();
         showToast("Refreshed active worker status.", "info");
     });
+
+    // Sidebar Strategy Configurator Form Submission
+    const sidebarForm = document.getElementById("tv-sidebar-strategy-form");
+    if (sidebarForm) {
+        sidebarForm.addEventListener("submit", handleSidebarStrategySave);
+    }
 }
 
 async function fetchQuotes() {
@@ -1001,7 +1007,10 @@ function setupBottomDockEvents() {
     document.getElementById("btn-dock-run-backtest").addEventListener("click", runDockBacktest);
 
     // Pine Strategy Quick Form
-    document.getElementById("tv-quick-strategy-form").addEventListener("submit", handleQuickStrategySave);
+    const quickForm = document.getElementById("tv-quick-strategy-form");
+    if (quickForm) {
+        quickForm.addEventListener("submit", handleQuickStrategySave);
+    }
 }
 
 async function runDockBacktest() {
@@ -1228,49 +1237,38 @@ async function fetchBotStatuses() {
         const bots = await resp.json();
         state.botStatuses = bots;
 
-        // Render sidebar bots & dock bots
+        // Render sidebar Bot Management cards
         const sideList = document.getElementById("sidebar-bots-list");
-        const dockGrid = document.getElementById("dock-bots-grid");
-        if (sideList) sideList.innerHTML = "";
-        if (dockGrid) dockGrid.innerHTML = "";
-
-        bots.forEach(b => {
-            const isRunning = b.status === "running";
-            
-            // Sidebar item
-            if (sideList) {
-                const bDiv = document.createElement("div");
-                bDiv.className = "tv-alert-item";
-                bDiv.innerHTML = `
-                    <div class="tv-alert-title">
-                        <span>${b.name}</span>
-                        <span class="${isRunning ? "text-green" : "text-muted"}">${b.status.toUpperCase()}</span>
-                    </div>
-                    <div class="tv-alert-meta">${b.instrument} (${b.granularity}) • Last: ${b.last_run ? new Date(b.last_run).toLocaleTimeString() : "Never"}</div>
-                `;
-                sideList.appendChild(bDiv);
-            }
-
-            // Dock Card
-            if (dockGrid) {
+        if (sideList) {
+            sideList.innerHTML = "";
+            bots.forEach(b => {
+                const isRunning = b.status === "running";
                 const card = document.createElement("div");
                 card.className = "tv-bot-card";
+                card.style.border = "1px solid var(--tv-border)";
+                card.style.borderRadius = "4px";
+                card.style.padding = "10px";
+                card.style.marginBottom = "10px";
+                card.style.background = "var(--tv-bg-card)";
+                
                 card.innerHTML = `
-                    <div class="tv-bot-card-header">
-                        <span class="tv-bot-name">${b.name}</span>
-                        <span class="badge-signal ${isRunning ? "buy" : "sell"}">${b.status.toUpperCase()}</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 700; color: var(--tv-text-bright); font-size: 12.5px;">${b.name}</span>
+                        <span class="badge-signal ${isRunning ? 'buy' : 'sell'}" style="font-size: 9px; padding: 2px 6px;">${b.status.toUpperCase()}</span>
                     </div>
-                    <div class="tv-bot-meta">${b.instrument} &bull; ${b.granularity} &bull; Errors: ${b.error_count}</div>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                    <div style="font-size: 11px; color: var(--tv-text-muted); margin-bottom: 8px;">
+                        <code>${b.instrument}</code> &bull; <code>${b.granularity}</code> &bull; Errors: ${b.error_count}
+                    </div>
+                    <div style="display: flex; gap: 8px;">
                         ${isRunning
-                            ? `<button class="tv-btn-secondary btn-block text-red" onclick="toggleBotWorker('${b.id}', 'stop')">Stop Worker</button>`
-                            : `<button class="tv-btn-primary btn-block" onclick="toggleBotWorker('${b.id}', 'start')">Start Worker</button>`
+                            ? `<button class="tv-btn-secondary btn-block text-red" style="padding: 4px; font-size: 11px;" onclick="toggleBotWorker('${b.id}', 'stop')">Stop Worker</button>`
+                            : `<button class="tv-btn-primary btn-block" style="padding: 4px; font-size: 11px;" onclick="toggleBotWorker('${b.id}', 'start')">Start Worker</button>`
                         }
                     </div>
                 `;
-                dockGrid.appendChild(card);
-            }
-        });
+                sideList.appendChild(card);
+            });
+        }
 
         // Update Console Logs
         if (bots.length > 0 && bots[0].logs) {
@@ -1439,41 +1437,87 @@ function setupModalsEvents() {
 async function handleQuickStrategySave(e) {
     e.preventDefault();
     const name = document.getElementById("quick-strat-name").value;
-    const type = document.getElementById("quick-strat-type").value;
-    const instrument = document.getElementById("quick-strat-instrument").value;
-    const granularity = document.getElementById("quick-strat-granularity").value;
-    const priceSource = document.getElementById("quick-strat-price-source").value;
+    const left = parseInt(document.getElementById("quick-strat-left").value);
+    const right = parseInt(document.getElementById("quick-strat-right").value);
+    const level = document.getElementById("quick-strat-signal-level").value;
+    const minFib = parseFloat(document.getElementById("quick-strat-min-fib").value);
+    const trend = document.getElementById("quick-strat-trend").checked;
+    const candle = document.getElementById("quick-strat-candle").checked;
     const telegram = document.getElementById("quick-strat-telegram").checked;
 
-    const left = parseInt(document.getElementById("quick-strat-left").value) || 5;
-    const right = parseInt(document.getElementById("quick-strat-right").value) || 5;
-    const level = document.getElementById("quick-strat-signal-level").value;
-    const minFib = parseFloat(document.getElementById("quick-strat-min-fib").value) || 0.0030;
+    const payload = {
+        id: "strat_" + Math.random().toString(36).substr(2, 9),
+        status: "active",
+        name: name,
+        instrument: state.currentSymbol,
+        granularity: state.currentGranularity,
+        telegram_enabled: telegram,
+        price_source: "Wick",
+        signal_level: level,
+        strategy_type: "Fibonacci",
+        bull_tp_level: "0", bull_sl_level: "1", bear_tp_level: "0", bear_sl_level: "1",
+        left_bars: left, right_bars: right, min_swing_size: 0.0, min_fib_range: minFib,
+        min_bars_between_swings: 1, require_alternating_swings: true, recalculate_on_extreme: false,
+        use_time_filter: false, start_hour: 8, start_minute: 0, end_hour: 16, end_minute: 0,
+        use_no_trade_1: true, nt1_start_hour: 9, nt1_start_minute: 30, nt1_end_hour: 10, nt1_end_minute: 0,
+        use_no_trade_2: false, nt2_start_hour: 0, nt2_start_minute: 0, nt2_end_hour: 0, nt2_end_minute: 0,
+        use_trend_filter: trend, trend_ma_type: "SMA", trend_length: 50, trend_slope_bars: 5, minimum_slope: 0.0,
+        use_candle_confirmation: candle, confirmation_type: "Rejection Candle", minimum_wick_ratio: 0.5,
+        use_consolidation_filter: false, consolidation_length: 20, consolidation_atr_length: 14, max_consolidation_atr: 3.0
+    };
+
+    try {
+        await fetch(API_BASE + "/api/strategies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        showToast("Configuration saved and live worker deployed!", "success");
+        fetchStrategies();
+        fetchBotStatuses();
+    } catch (err) {
+        showToast("Error saving: " + err.message, "danger");
+    }
+}
+
+async function handleSidebarStrategySave(e) {
+    e.preventDefault();
+    const name = document.getElementById("side-strat-name").value;
+    const type = document.getElementById("side-strat-type").value;
+    const instrument = document.getElementById("side-strat-instrument").value;
+    const granularity = document.getElementById("side-strat-granularity").value;
+    const priceSource = document.getElementById("side-strat-price-source").value;
+    const telegram = document.getElementById("side-strat-telegram").checked;
+
+    const left = parseInt(document.getElementById("side-strat-left").value) || 5;
+    const right = parseInt(document.getElementById("side-strat-right").value) || 5;
+    const level = document.getElementById("side-strat-signal-level").value;
+    const minFib = parseFloat(document.getElementById("side-strat-min-fib").value) || 0.0030;
     
-    const bullTp = document.getElementById("quick-strat-bull-tp").value;
-    const bullSl = document.getElementById("quick-strat-bull-sl").value;
-    const bearTp = document.getElementById("quick-strat-bear-tp").value;
-    const bearSl = document.getElementById("quick-strat-bear-sl").value;
+    const bullTp = document.getElementById("side-strat-bull-tp").value;
+    const bullSl = document.getElementById("side-strat-bull-sl").value;
+    const bearTp = document.getElementById("side-strat-bear-tp").value;
+    const bearSl = document.getElementById("side-strat-bear-sl").value;
     
-    const requireAlt = document.getElementById("quick-strat-require-alt").checked;
-    const recalcExtreme = document.getElementById("quick-strat-recalc-extreme").checked;
+    const requireAlt = document.getElementById("side-strat-require-alt").checked;
+    const recalcExtreme = document.getElementById("side-strat-recalc-extreme").checked;
 
-    const useTrend = document.getElementById("quick-strat-use-trend").checked;
-    const trendLen = parseInt(document.getElementById("quick-strat-trend-len").value) || 50;
-    const trendMaType = document.getElementById("quick-strat-trend-ma-type").value;
+    const useTrend = document.getElementById("side-strat-use-trend").checked;
+    const trendLen = parseInt(document.getElementById("side-strat-trend-len").value) || 50;
+    const trendMaType = document.getElementById("side-strat-trend-ma-type").value;
 
-    const useCandle = document.getElementById("quick-strat-use-candle").checked;
-    const candleType = document.getElementById("quick-strat-candle-type").value;
-    const wickRatio = parseFloat(document.getElementById("quick-strat-wick-ratio").value) || 0.5;
+    const useCandle = document.getElementById("side-strat-use-candle").checked;
+    const candleType = document.getElementById("side-strat-candle-type").value;
+    const wickRatio = parseFloat(document.getElementById("side-strat-wick-ratio").value) || 0.5;
 
-    const useTimeFilter = document.getElementById("quick-strat-use-time-filter").checked;
-    const startHour = parseInt(document.getElementById("quick-strat-start-hour").value) || 8;
-    const startMinute = parseInt(document.getElementById("quick-strat-start-minute").value) || 0;
-    const endHour = parseInt(document.getElementById("quick-strat-end-hour").value) || 16;
-    const endMinute = parseInt(document.getElementById("quick-strat-end-minute").value) || 0;
+    const useTimeFilter = document.getElementById("side-strat-use-time-filter").checked;
+    const startHour = parseInt(document.getElementById("side-strat-start-hour").value) || 8;
+    const startMinute = parseInt(document.getElementById("side-strat-start-minute").value) || 0;
+    const endHour = parseInt(document.getElementById("side-strat-end-hour").value) || 16;
+    const endMinute = parseInt(document.getElementById("side-strat-end-minute").value) || 0;
 
-    const useNt1 = document.getElementById("quick-strat-use-nt1").checked;
-    const useConsolidation = document.getElementById("quick-strat-use-consolidation").checked;
+    const useNt1 = document.getElementById("side-strat-use-nt1").checked;
+    const useConsolidation = document.getElementById("side-strat-use-consolidation").checked;
 
     const payload = {
         id: "strat_" + Math.random().toString(36).substr(2, 9),

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView Bot Hub — Bot Management & Deployment</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Chart.js for Bottom Strategy Tester Equity Curve -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* Specific enhancements for full page management view */
+        .mgmt-body {
+            background-color: var(--tv-bg-base);
+            color: var(--tv-text-primary);
+            font-family: var(--tv-font);
+            font-size: 13px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            user-select: none;
+        }
+        .mgmt-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 480px 1fr;
+            gap: 24px;
+        }
+        @media (max-width: 1024px) {
+            .mgmt-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        .mgmt-card {
+            background: var(--tv-bg-panel);
+            border: 1px solid var(--tv-border);
+            border-radius: 6px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .mgmt-title-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--tv-border);
+            padding-bottom: 10px;
+        }
+        .mgmt-title-bar h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--tv-text-bright);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .form-row-custom {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .form-group-custom {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .form-group-custom label {
+            font-size: 11px;
+            color: var(--tv-text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tv-input-custom {
+            background: var(--tv-bg-base);
+            border: 1px solid var(--tv-border);
+            color: var(--tv-text-bright);
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 12px;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .tv-input-custom:focus {
+            border-color: var(--tv-blue);
+        }
+        .accordion-header-custom {
+            padding: 12px;
+            background: var(--tv-bg-hover);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--tv-border);
+        }
+        .accordion-content-custom {
+            padding: 16px;
+        }
+        .grid-bots-custom {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .bot-card-custom {
+            background: var(--tv-bg-card);
+            border: 1px solid var(--tv-border);
+            border-radius: 6px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .bot-card-custom:hover {
+            transform: translateY(-2px);
+            border-color: var(--tv-blue);
+        }
+    </style>
+</head>
+<body class="mgmt-body">
+    <!-- Toast Notification Container -->
+    <div id="tv-toast-container" class="tv-toast-container"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="tv-topbar">
+        <div class="tv-topbar-left">
+            <a href="/index.html" class="tv-action-pill" style="text-decoration: none; display: flex; align-items: center; gap: 6px; padding: 6px 12px;">
+                <i data-lucide="chevron-left"></i>
+                <span>Back to Chart</span>
+            </a>
+            <div class="tv-divider-v"></div>
+            <div class="tv-logo">
+                <div class="tv-logo-mark"><span class="tv-mark-slash">//</span></div>
+                <span class="tv-logo-text">TradingView</span>
+                <span class="tv-logo-badge">Bot Hub</span>
+            </div>
+        </div>
+        <div class="tv-topbar-right">
+            <div class="tv-legend-strategy-status">
+                <span class="status-pulse online"></span>
+                <span>Bot Hub Server Active</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="mgmt-container">
+        
+        <!-- Left: Deployment Section -->
+        <section class="mgmt-card">
+            <div class="mgmt-title-bar" style="margin-bottom: 12px; border-bottom: none;">
+                <h2><i data-lucide="sliders"></i> Strategy Deployer</h2>
+            </div>
+
+            <!-- Tab Headers for Deployer -->
+            <div style="display: flex; gap: 4px; border-bottom: 1px solid var(--tv-border); margin-bottom: 16px; padding-bottom: 6px;">
+                <button class="tv-action-pill active" id="btn-tab-quick" style="flex: 1; border-radius: 4px; padding: 6px; font-weight: 600; cursor: pointer; text-align: center; border: none; background: transparent;">Quick Deploy</button>
+                <button class="tv-action-pill" id="btn-tab-advanced" style="flex: 1; border-radius: 4px; padding: 6px; font-weight: 600; cursor: pointer; text-align: center; border: none; background: transparent;">Advanced Config</button>
+            </div>
+
+            <!-- Panel 1: Quick Deploy (Simple Form) -->
+            <div id="pane-deploy-quick" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
+                <form id="tv-quick-strategy-form" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div class="form-group-custom">
+                        <label>Strategy Name</label>
+                        <input type="text" id="quick-strat-name" class="tv-input-custom" value="EUR/USD Custom Quick" required>
+                    </div>
+                    
+                    <div class="form-row-custom">
+                        <div class="form-group-custom">
+                            <label>Pivot Left/Right Bars</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="number" id="quick-strat-left" class="tv-input-custom" value="5" min="1" title="Left">
+                                <input type="number" id="quick-strat-right" class="tv-input-custom" value="5" min="1" title="Right">
+                            </div>
+                        </div>
+                        <div class="form-group-custom">
+                            <label>Fib Signal Level</label>
+                            <select id="quick-strat-signal-level" class="tv-input-custom">
+                                <option value="0.618" selected>0.618 (Golden Pocket)</option>
+                                <option value="0.5">0.500 (Midpoint)</option>
+                                <option value="0.786">0.786 (Deep Pullback)</option>
+                                <option value="0.382">0.382 (Shallow Retrace)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group-custom">
+                        <label>Min Fib Range (Pips)</label>
+                        <input type="number" step="0.0001" id="quick-strat-min-fib" class="tv-input-custom" value="0.0030">
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px; margin-bottom: 6px;">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="quick-strat-trend" checked>
+                            <span class="checkmark"></span>
+                            Trend Filter (EMA 50)
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="quick-strat-candle" checked>
+                            <span class="checkmark"></span>
+                            Candle Confirmation (Rejection Wick)
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="quick-strat-telegram" checked>
+                            <span class="checkmark"></span>
+                            Telegram Alerts
+                        </label>
+                    </div>
+
+                    <button type="submit" class="tv-btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-weight: 600; font-size: 13px; margin-top: auto;">
+                        <i data-lucide="play-circle"></i>
+                        <span>Quick Deploy Bot</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Panel 2: Advanced Config (Accordion Form) -->
+            <div id="pane-deploy-advanced" style="display: none; flex-direction: column; gap: 12px; height: 100%;">
+                <form id="tv-sidebar-strategy-form" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Accordion 1: General Settings -->
+                    <div class="accordion-item" style="border: 1px solid var(--tv-border); border-radius: 4px; background: rgba(255, 255, 255, 0.01);">
+                        <div class="accordion-header-custom" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                            <strong style="color: var(--tv-text-bright);">1. General Settings</strong>
+                            <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                        </div>
+                        <div class="accordion-content-custom">
+                            <div class="form-group-custom" style="margin-bottom: 10px;">
+                                <label>Strategy Name</label>
+                                <input type="text" id="side-strat-name" class="tv-input-custom" value="EUR/USD Custom Fib" required>
+                            </div>
+                            <div class="form-row-custom">
+                                <div class="form-group-custom">
+                                    <label>Strategy Type</label>
+                                    <select id="side-strat-type" class="tv-input-custom">
+                                        <option value="Fibonacci" selected>Swing Fibonacci</option>
+                                        <option value="MomentumBreakout">Momentum Breakout</option>
+                                        <option value="AIClaude">Claude AI Analyst</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-custom">
+                                    <label>Instrument</label>
+                                    <select id="side-strat-instrument" class="tv-input-custom">
+                                        <option value="EUR_USD" selected>EUR/USD</option>
+                                        <option value="GBP_USD">GBP/USD</option>
+                                        <option value="USD_JPY">USD/JPY</option>
+                                        <option value="XAU_USD">XAU/USD (Gold)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row-custom">
+                                <div class="form-group-custom">
+                                    <label>Granularity</label>
+                                    <select id="side-strat-granularity" class="tv-input-custom">
+                                        <option value="M1">1 Minute</option>
+                                        <option value="M5">5 Minutes</option>
+                                        <option value="M15" selected>15 Minutes</option>
+                                        <option value="M30">30 Minutes</option>
+                                        <option value="H1">1 Hour</option>
+                                        <option value="D">Daily</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-custom">
+                                    <label>Price Source</label>
+                                    <select id="side-strat-price-source" class="tv-input-custom">
+                                        <option value="Wick (H/L)" selected>Wick (High/Low)</option>
+                                        <option value="Close">Close Price</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="margin-top: 6px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="side-strat-telegram" checked>
+                                    <span class="checkmark"></span>
+                                    Dispatch Signal Alerts to Telegram
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accordion 2: Pivot & Fibonacci Settings -->
+                    <div class="accordion-item" style="border: 1px solid var(--tv-border); border-radius: 4px; background: rgba(255, 255, 255, 0.01);">
+                        <div class="accordion-header-custom" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                            <strong style="color: var(--tv-text-bright);">2. Pivot & Fibonacci</strong>
+                            <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                        </div>
+                        <div class="accordion-content-custom" style="display: none;">
+                            <div class="form-row-custom">
+                                <div class="form-group-custom">
+                                    <label>Left Pivot Bars</label>
+                                    <input type="number" id="side-strat-left" class="tv-input-custom" value="5" min="1">
+                                </div>
+                                <div class="form-group-custom">
+                                    <label>Right Pivot Bars</label>
+                                    <input type="number" id="side-strat-right" class="tv-input-custom" value="5" min="1">
+                                </div>
+                            </div>
+                            <div class="form-row-custom">
+                                <div class="form-group-custom">
+                                    <label>Fib Signal Level</label>
+                                    <select id="side-strat-signal-level" class="tv-input-custom">
+                                        <option value="0.618" selected>0.618 (Golden Pocket)</option>
+                                        <option value="0.5">0.500 (Midpoint)</option>
+                                        <option value="0.786">0.786 (Deep Pullback)</option>
+                                        <option value="0.382">0.382 (Shallow Retrace)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-custom">
+                                    <label>Min Fib Range (Pips)</label>
+                                    <input type="number" step="0.0001" id="side-strat-min-fib" class="tv-input-custom" value="0.0030">
+                                </div>
+                            </div>
+                            <div class="form-row-custom">
+                                <div class="form-group-custom">
+                                    <label>Bullish TP Target</label>
+                                    <select id="side-strat-bull-tp" class="tv-input-custom">
+                                        <option value="0" selected>0.0 (Swing High)</option>
+                                        <option value="-0.272">-0.272 Extension</option>
+                                        <option value="-0.618">-0.618 Extension</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-custom">
+                                    <label>Bullish Stop Loss</label>
+                                    <select id="side-strat-bull-sl" class="tv-input-custom">
+                                        <option value="1" selected>1.0 (Swing Low)</option>
+                                        <option value="1.272">1.272 Stop</option>
+                                        <option value="1.618">1.618 Stop</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row-custom">
+                                <div class="form-group-custom">
+                                    <label>Bearish TP Target</label>
+                                    <select id="side-strat-bear-tp" class="tv-input-custom">
+                                        <option value="0" selected>0.0 (Swing Low)</option>
+                                        <option value="-0.272">-0.272 Extension</option>
+                                        <option value="-0.618">-0.618 Extension</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-custom">
+                                    <label>Bearish Stop Loss</label>
+                                    <select id="side-strat-bear-sl" class="tv-input-custom">
+                                        <option value="1" selected>1.0 (Swing High)</option>
+                                        <option value="1.272">1.272 Stop</option>
+                                        <option value="1.618">1.618 Stop</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 12px; margin-top: 6px;">
+                                <label class="checkbox-container" style="font-size: 11px; flex: 1;">
+                                    <input type="checkbox" id="side-strat-require-alt" checked>
+                                    <span class="checkmark"></span>
+                                    Alt Swings
+                                </label>
+                                <label class="checkbox-container" style="font-size: 11px; flex: 1;">
+                                    <input type="checkbox" id="side-strat-recalc-extreme">
+                                    <span class="checkmark"></span>
+                                    Recalc Outliers
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accordion 3: Strategy Filters -->
+                    <div class="accordion-item" style="border: 1px solid var(--tv-border); border-radius: 4px; background: rgba(255, 255, 255, 0.01);">
+                        <div class="accordion-header-custom" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                            <strong style="color: var(--tv-text-bright);">3. Strategy Filters</strong>
+                            <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                        </div>
+                        <div class="accordion-content-custom" style="display: none;">
+                            <!-- EMA Trend Filter -->
+                            <div style="margin-bottom: 12px; border-bottom: 1px dashed var(--tv-border); padding-bottom: 10px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="side-strat-use-trend" checked>
+                                    <span class="checkmark"></span>
+                                    <strong>EMA Trend Filter</strong>
+                                </label>
+                                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                                    <input type="number" id="side-strat-trend-len" class="tv-input-custom" value="50" style="flex: 1;" title="Length">
+                                    <select id="side-strat-trend-ma-type" class="tv-input-custom" style="flex: 1;">
+                                        <option value="EMA" selected>EMA</option>
+                                        <option value="SMA">SMA</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Candle Confirmation -->
+                            <div style="margin-bottom: 12px; border-bottom: 1px dashed var(--tv-border); padding-bottom: 10px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="side-strat-use-candle" checked>
+                                    <span class="checkmark"></span>
+                                    <strong>Candle Confirmation</strong>
+                                </label>
+                                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                                    <select id="side-strat-candle-type" class="tv-input-custom" style="flex: 1.2;">
+                                        <option value="Rejection Candle" selected>Wick Ratio</option>
+                                        <option value="Close Confirmation">Close Beyond</option>
+                                        <option value="Engulfing Candle">Engulfing</option>
+                                    </select>
+                                    <input type="number" step="0.1" id="side-strat-wick-ratio" class="tv-input-custom" value="0.5" style="flex: 0.8;" title="Ratio">
+                                </div>
+                            </div>
+                            <!-- Time Session Window -->
+                            <div style="margin-bottom: 12px; border-bottom: 1px dashed var(--tv-border); padding-bottom: 10px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="side-strat-use-time-filter">
+                                    <span class="checkmark"></span>
+                                    <strong>Trading Hours Window</strong>
+                                </label>
+                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                                    <input type="number" id="side-strat-start-hour" class="tv-input-custom" value="8" min="0" max="23" style="width: 50px;">
+                                    <span>:</span>
+                                    <input type="number" id="side-strat-start-minute" class="tv-input-custom" value="0" min="0" max="59" style="width: 50px;">
+                                    <span style="margin: 0 4px; color: var(--tv-text-secondary);">to</span>
+                                    <input type="number" id="side-strat-end-hour" class="tv-input-custom" value="16" min="0" max="23" style="width: 50px;">
+                                    <span>:</span>
+                                    <input type="number" id="side-strat-end-minute" class="tv-input-custom" value="0" min="0" max="59" style="width: 50px;">
+                                </div>
+                            </div>
+                            <!-- General Safeguard checkboxes -->
+                            <div style="display: flex; gap: 12px;">
+                                <label class="checkbox-container" style="font-size: 11px; flex: 1;">
+                                    <input type="checkbox" id="side-strat-use-nt1" checked>
+                                    <span class="checkmark"></span>
+                                    Avoid US Open
+                                </label>
+                                <label class="checkbox-container" style="font-size: 11px; flex: 1;">
+                                    <input type="checkbox" id="side-strat-use-consolidation">
+                                    <span class="checkmark"></span>
+                                    ATR Consolidate
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Deployment Button -->
+                    <button type="submit" class="tv-btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-weight: 600; font-size: 13px; margin-top: 10px;">
+                        <i data-lucide="play-circle"></i>
+                        <span>Deploy Bot Strategy</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Right: Bot Management & Tester Section -->
+        <section class="mgmt-card">
+            <div class="mgmt-title-bar" style="margin-bottom: 12px; border-bottom: none;">
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <button class="tv-action-pill active" id="btn-tab-bots-list" style="border-radius: 4px; padding: 6px 12px; font-weight: 600; cursor: pointer; border: none; background: transparent; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--tv-text-bright);"><i data-lucide="cpu" style="width:16px;height:16px;"></i> Active Bots</button>
+                    <button class="tv-action-pill" id="btn-tab-tester" style="border-radius: 4px; padding: 6px 12px; font-weight: 600; cursor: pointer; border: none; background: transparent; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--tv-text-bright);"><i data-lucide="line-chart" style="width:16px;height:16px;"></i> Strategy Tester</button>
+                </div>
+                <button class="tv-action-pill" id="btn-refresh-bots" style="padding: 6px 12px; display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="refresh-cw"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+            
+            <!-- Panel A: Active Bots List -->
+            <div id="pane-bots-list" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="grid-bots-custom" id="sidebar-bots-list">
+                    <div style="grid-column: 1/-1; padding: 40px 0; text-align: center; color: var(--tv-text-secondary);">
+                        Loading active bot workers...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel B: Strategy Tester -->
+            <div id="pane-tester" style="display: none; flex-direction: column; gap: 16px; height: 100%;">
+                <div class="tv-tester-toolbar" style="display: flex; justify-content: space-between; align-items: center; background: var(--tv-bg-base); padding: 10px; border-radius: 4px; border: 1px solid var(--tv-border);">
+                    <div class="tv-tester-controls" style="display: flex; gap: 12px; align-items: center;">
+                        <div class="tv-control-inline" style="display: flex; gap: 6px; align-items: center;">
+                            <label style="font-size: 11px; text-transform: uppercase; color: var(--tv-text-secondary); font-weight: 600;">Strategy:</label>
+                            <select id="bt-dock-strategy" class="tv-input-custom" style="width: 220px; padding: 6px 10px;">
+                                <!-- Options populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="tv-control-inline" style="display: flex; gap: 6px; align-items: center;">
+                            <label style="font-size: 11px; text-transform: uppercase; color: var(--tv-text-secondary); font-weight: 600;">History Bars:</label>
+                            <select id="bt-dock-count" class="tv-input-custom" style="width: 130px; padding: 6px 10px;">
+                                <option value="150">150 Candles</option>
+                                <option value="300" selected>300 Candles</option>
+                                <option value="500">500 Candles</option>
+                                <option value="1000">1000 Candles</option>
+                            </select>
+                        </div>
+                        <button class="tv-btn-primary" id="btn-dock-run-backtest" style="padding: 6px 16px; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="play" style="width:14px;height:14px;"></i>
+                            <span>Run Backtest</span>
+                        </button>
+                    </div>
+
+                    <div class="tv-tester-period" id="dock-bt-period" style="font-size: 11px; color: var(--tv-text-secondary);">
+                        Market History: <strong id="dock-period-range" style="color: var(--tv-text-bright);">-</strong>
+                    </div>
+                </div>
+
+                <!-- Metrics Strip -->
+                <div class="tv-tester-metrics-strip" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                    <div class="tv-metric-cell" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; padding: 10px; display: flex; flex-direction: column;">
+                        <span class="m-label" style="font-size: 10px; color: var(--tv-text-secondary); text-transform: uppercase; font-weight: 500; margin-bottom: 4px;">Net Profit</span>
+                        <strong class="m-val" id="dock-net-profit" style="font-size: 15px; font-weight: 700; color: var(--tv-text-bright);">0.00%</strong>
+                        <span class="m-sub text-green" id="dock-net-pips" style="font-size: 10px; color: var(--tv-green); margin-top: 2px;">+0.0 pips</span>
+                    </div>
+                    <div class="tv-metric-cell" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; padding: 10px; display: flex; flex-direction: column;">
+                        <span class="m-label" style="font-size: 10px; color: var(--tv-text-secondary); text-transform: uppercase; font-weight: 500; margin-bottom: 4px;">Profit Factor</span>
+                        <strong class="m-val text-green" id="dock-profit-factor" style="font-size: 15px; font-weight: 700; color: var(--tv-green);">0.00</strong>
+                        <span class="m-sub" style="font-size: 10px; color: var(--tv-text-secondary); margin-top: 2px;">Gross Win/Loss</span>
+                    </div>
+                    <div class="tv-metric-cell" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; padding: 10px; display: flex; flex-direction: column;">
+                        <span class="m-label" style="font-size: 10px; color: var(--tv-text-secondary); text-transform: uppercase; font-weight: 500; margin-bottom: 4px;">Win Rate</span>
+                        <strong class="m-val" id="dock-win-rate" style="font-size: 15px; font-weight: 700; color: var(--tv-text-bright);">0%</strong>
+                        <span class="m-sub" id="dock-win-loss" style="font-size: 10px; color: var(--tv-text-secondary); margin-top: 2px;">0 W / 0 L</span>
+                    </div>
+                    <div class="tv-metric-cell" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; padding: 10px; display: flex; flex-direction: column;">
+                        <span class="m-label" style="font-size: 10px; color: var(--tv-text-secondary); text-transform: uppercase; font-weight: 500; margin-bottom: 4px;">Max Drawdown</span>
+                        <strong class="m-val text-red" id="dock-max-drawdown" style="font-size: 15px; font-weight: 700; color: var(--tv-red);">0.00%</strong>
+                        <span class="m-sub" style="font-size: 10px; color: var(--tv-text-secondary); margin-top: 2px;">Peak to Valley</span>
+                    </div>
+                    <div class="tv-metric-cell" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; padding: 10px; display: flex; flex-direction: column;">
+                        <span class="m-label" style="font-size: 10px; color: var(--tv-text-secondary); text-transform: uppercase; font-weight: 500; margin-bottom: 4px;">Total Trades</span>
+                        <strong class="m-val" id="dock-total-trades" style="font-size: 15px; font-weight: 700; color: var(--tv-text-bright);">0</strong>
+                        <span class="m-sub" id="dock-open-trades" style="font-size: 10px; color: var(--tv-text-secondary); margin-top: 2px;">0 Open</span>
+                    </div>
+                </div>
+
+                <!-- Results Panels -->
+                <div class="tv-tester-results" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; min-height: 380px;">
+                    <!-- Left: Equity Curve Chart -->
+                    <div class="tv-tester-chart-container" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; padding: 16px; height: 100%; position: relative; min-height: 300px;">
+                        <canvas id="dock-equity-chart" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+
+                    <!-- Right: Trade List Table -->
+                    <div class="tv-tester-table-container" style="background: var(--tv-bg-base); border: 1px solid var(--tv-border); border-radius: 4px; overflow-y: auto; height: 100%; max-height: 380px;">
+                        <table class="tv-tester-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 11.5px;">
+                            <thead style="position: sticky; top: 0; background: var(--tv-bg-panel); border-bottom: 1px solid var(--tv-border); z-index: 2;">
+                                <tr>
+                                    <th style="padding: 10px;">#</th>
+                                    <th style="padding: 10px;">Type</th>
+                                    <th style="padding: 10px;">Entry</th>
+                                    <th style="padding: 10px;">Price</th>
+                                    <th style="padding: 10px;">TP</th>
+                                    <th style="padding: 10px;">SL</th>
+                                    <th style="padding: 10px;">Exit</th>
+                                    <th style="padding: 10px;">Result</th>
+                                    <th style="padding: 10px;">Pips</th>
+                                    <th style="padding: 10px;">PnL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dock-trades-tbody" style="color: var(--tv-text-primary);">
+                                <tr><td colspan="10" class="text-center py-4 text-muted" style="padding: 20px; text-align: center; color: var(--tv-text-secondary);">Click "Run Backtest" above to simulate trades over market history.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Script loading logic -->
+    <script src="management.js"></script>
+    <script>
+        // Init Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>

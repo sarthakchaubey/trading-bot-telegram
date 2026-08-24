@@ -36,6 +36,9 @@
                 <!-- Main Menu Dropdown -->
                 <div class="tv-dropdown-menu" id="tv-main-menu-dropdown" style="left: 0; width: 220px;">
                     <div class="tv-dropdown-header">TradingView Menu</div>
+                    <div class="tv-menu-item" onclick="window.location.href='/management.html'">
+                        <i data-lucide="cpu"></i> <span>Bot Management & Config</span>
+                    </div>
                     <div class="tv-menu-item" id="menu-save-layout">
                         <i data-lucide="save"></i> <span>Save Chart Layout</span>
                     </div>
@@ -179,11 +182,11 @@
             <button class="tv-icon-btn" id="btn-fullscreen" title="Toggle Fullscreen"><i data-lucide="maximize-2"></i></button>
             <button class="tv-icon-btn" id="btn-screenshot" title="Take Snapshot"><i data-lucide="camera"></i></button>
 
-            <!-- Quick Add Strategy Modal Trigger -->
-            <button class="tv-btn-primary" id="btn-create-bot-modal">
-                <i data-lucide="plus"></i>
-                <span>Deploy Bot</span>
-            </button>
+            <!-- Link to Management Page -->
+            <a href="/management.html" class="tv-btn-primary" style="text-decoration: none;">
+                <i data-lucide="cpu"></i>
+                <span>Bot Management</span>
+            </a>
         </div>
     </header>
 
@@ -282,9 +285,7 @@
                 <button class="tv-side-tab" data-tab="tab-alerts" title="Telegram Signals Stream">
                     <i data-lucide="bell"></i>
                 </button>
-                <button class="tv-side-tab" data-tab="tab-bots" title="Bot Workers Status">
-                    <i data-lucide="cpu"></i>
-                </button>
+
             </div>
 
             <!-- Sidebar Tab Panes -->
@@ -443,17 +444,6 @@
                     </div>
                 </div>
 
-                <!-- 5. Active Bot Workers Pane -->
-                <div class="tv-pane" id="tab-bots">
-                    <div class="tv-pane-header">
-                        <h3>Active Workers</h3>
-                        <i data-lucide="refresh-cw" class="tv-clickable-icon" id="btn-refresh-bots"></i>
-                    </div>
-                    <div class="tv-bots-list" id="sidebar-bots-list">
-                        <!-- Dynamic Bot Worker Items -->
-                    </div>
-                </div>
-
             </div>
         </aside>
 
@@ -464,19 +454,7 @@
         <!-- Bottom Dock Tab Bar -->
         <div class="tv-dock-header">
             <div class="tv-dock-tabs">
-                <button class="tv-dock-tab active" data-dock="dock-tester">
-                    <i data-lucide="line-chart"></i>
-                    <span>Strategy Tester</span>
-                </button>
-                <button class="tv-dock-tab" data-dock="dock-bots">
-                    <i data-lucide="cpu"></i>
-                    <span>Trading Panel & Bots</span>
-                </button>
-                <button class="tv-dock-tab" data-dock="dock-editor">
-                    <i data-lucide="sliders"></i>
-                    <span>Pine Strategy Inputs</span>
-                </button>
-                <button class="tv-dock-tab" data-dock="dock-console">
+                <button class="tv-dock-tab active" data-dock="dock-console">
                     <i data-lucide="terminal"></i>
                     <span>Console Logs</span>
                 </button>
@@ -496,315 +474,8 @@
         <!-- Dock Content Body -->
         <div class="tv-dock-body">
             
-            <!-- 1. Strategy Tester Pane (Backtesting Engine) -->
-            <div class="tv-dock-pane active" id="dock-tester">
-                <div class="tv-tester-toolbar">
-                    <div class="tv-tester-controls">
-                        <div class="tv-control-inline">
-                            <label>Strategy:</label>
-                            <select id="bt-dock-strategy" class="tv-select-sm">
-                                <!-- Options populated dynamically -->
-                            </select>
-                        </div>
-                        <div class="tv-control-inline">
-                            <label>History Bars:</label>
-                            <select id="bt-dock-count" class="tv-select-sm">
-                                <option value="150">150 Candles</option>
-                                <option value="300" selected>300 Candles</option>
-                                <option value="500">500 Candles</option>
-                                <option value="1000">1000 Candles</option>
-                            </select>
-                        </div>
-                        <button class="tv-btn-primary tv-btn-sm" id="btn-dock-run-backtest">
-                            <i data-lucide="play"></i>
-                            <span>Run Backtest</span>
-                        </button>
-                    </div>
-
-                    <div class="tv-tester-period" id="dock-bt-period">
-                        Market History: <strong id="dock-period-range">-</strong>
-                    </div>
-                </div>
-
-                <!-- Backtest Performance Metric Strips -->
-                <div class="tv-tester-metrics-strip">
-                    <div class="tv-metric-cell">
-                        <span class="m-label">Net Profit</span>
-                        <strong class="m-val" id="dock-net-profit">0.00%</strong>
-                        <span class="m-sub text-green" id="dock-net-pips">+0.0 pips</span>
-                    </div>
-                    <div class="tv-metric-cell">
-                        <span class="m-label">Profit Factor</span>
-                        <strong class="m-val text-green" id="dock-profit-factor">0.00</strong>
-                        <span class="m-sub">Gross Win/Loss</span>
-                    </div>
-                    <div class="tv-metric-cell">
-                        <span class="m-label">Win Rate</span>
-                        <strong class="m-val" id="dock-win-rate">0%</strong>
-                        <span class="m-sub" id="dock-win-loss">0 W / 0 L</span>
-                    </div>
-                    <div class="tv-metric-cell">
-                        <span class="m-label">Max Drawdown</span>
-                        <strong class="m-val text-red" id="dock-max-drawdown">0.00%</strong>
-                        <span class="m-sub">Peak to Valley</span>
-                    </div>
-                    <div class="tv-metric-cell">
-                        <span class="m-label">Total Trades</span>
-                        <strong class="m-val" id="dock-total-trades">0</strong>
-                        <span class="m-sub" id="dock-open-trades">0 Open</span>
-                    </div>
-                </div>
-
-                <!-- Strategy Tester Split: Equity Curve + List of Trades -->
-                <div class="tv-tester-split-view">
-                    <!-- Left: Equity Curve Chart -->
-                    <div class="tv-tester-equity-box">
-                        <div class="tv-box-title">Cumulative Growth Curve (%)</div>
-                        <div class="tv-equity-canvas-wrapper">
-                            <canvas id="dock-equity-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Right: Trade Log Table -->
-                    <div class="tv-tester-trades-box">
-                        <div class="tv-box-title">List of Simulated Trades</div>
-                        <div class="tv-trades-table-wrapper">
-                            <table class="tv-trades-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Type</th>
-                                        <th>Entry Time</th>
-                                        <th>Price</th>
-                                        <th>TP</th>
-                                        <th>SL</th>
-                                        <th>Exit Time</th>
-                                        <th>Result</th>
-                                        <th>Pips</th>
-                                        <th>PnL (%)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dock-trades-tbody">
-                                    <tr><td colspan="10" class="text-center py-4 text-muted">Click "Run Backtest" above to simulate trades over market history.</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 2. Trading Panel & Bots Pane -->
-            <div class="tv-dock-pane" id="dock-bots">
-                <div class="tv-bots-grid" id="dock-bots-grid">
-                    <!-- Dynamic Bot Cards -->
-                </div>
-            </div>
-
-            <!-- 3. Pine Strategy Inputs Pane -->
-            <div class="tv-dock-pane" id="dock-editor">
-                <div class="tv-editor-form-wrapper" style="overflow-y: auto; padding: 4px;">
-                    <form id="tv-quick-strategy-form">
-                        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                            <!-- Column 1: General Settings -->
-                            <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--tv-border); padding-right: 20px;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: var(--tv-text-bright); border-bottom: 1px solid var(--tv-border); padding-bottom: 6px; margin-bottom: 4px;">General Settings</h3>
-                                
-                                <div class="form-group">
-                                    <label>Strategy Name</label>
-                                    <input type="text" id="quick-strat-name" class="form-control" value="EUR/USD Custom Fib" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Strategy Type</label>
-                                    <select id="quick-strat-type" class="form-control">
-                                        <option value="Fibonacci" selected>Swing Fibonacci</option>
-                                        <option value="MomentumBreakout">Momentum Exhaustion Breakout</option>
-                                        <option value="AIClaude">Claude AI Analyst</option>
-                                    </select>
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Instrument</label>
-                                        <select id="quick-strat-instrument" class="form-control">
-                                            <option value="EUR_USD" selected>EUR_USD</option>
-                                            <option value="GBP_USD">GBP_USD</option>
-                                            <option value="USD_JPY">USD_JPY</option>
-                                            <option value="XAU_USD">XAU_USD</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Granularity</label>
-                                        <select id="quick-strat-granularity" class="form-control">
-                                            <option value="M1">M1</option>
-                                            <option value="M5">M5</option>
-                                            <option value="M15" selected>M15</option>
-                                            <option value="M30">M30</option>
-                                            <option value="H1">H1</option>
-                                            <option value="H4">H4</option>
-                                            <option value="D">Daily</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Price Source</label>
-                                        <select id="quick-strat-price-source" class="form-control">
-                                            <option value="Wick" selected>Wick (H/L)</option>
-                                            <option value="Body">Body (O/C)</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group" style="flex: 1; display: flex; align-items: flex-end; padding-bottom: 6px;">
-                                        <label class="checkbox-container">
-                                            <input type="checkbox" id="quick-strat-telegram" checked>
-                                            <span class="checkmark"></span>
-                                            Telegram Alerts
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Column 2: Pivot & Fibonacci Settings -->
-                            <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--tv-border); padding-right: 20px;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: var(--tv-text-bright); border-bottom: 1px solid var(--tv-border); padding-bottom: 6px; margin-bottom: 4px;">Pivot & Fibonacci</h3>
-                                
-                                <div style="display: flex; gap: 10px;">
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Left Pivot Bars</label>
-                                        <input type="number" id="quick-strat-left" class="form-control" value="5" min="1">
-                                    </div>
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Right Pivot Bars</label>
-                                        <input type="number" id="quick-strat-right" class="form-control" value="5" min="1">
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Signal Fib Level</label>
-                                        <select id="quick-strat-signal-level" class="form-control">
-                                            <option value="0.618" selected>0.61 Golden Pocket</option>
-                                            <option value="0.5">0.50 Midpoint</option>
-                                            <option value="0.786">0.78 Deep Pullback</option>
-                                            <option value="0.382">0.38 Shallow Retr</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Min Fib Range</label>
-                                        <input type="number" step="0.0001" id="quick-strat-min-fib" class="form-control" value="0.0030">
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Bullish TP / SL</label>
-                                        <div style="display: flex; gap: 4px;">
-                                            <input type="text" id="quick-strat-bull-tp" class="form-control" value="0" style="padding: 4px;" title="Take Profit">
-                                            <input type="text" id="quick-strat-bull-sl" class="form-control" value="1" style="padding: 4px;" title="Stop Loss">
-                                        </div>
-                                    </div>
-                                    <div class="form-group" style="flex: 1;">
-                                        <label>Bearish TP / SL</label>
-                                        <div style="display: flex; gap: 4px;">
-                                            <input type="text" id="quick-strat-bear-tp" class="form-control" value="0" style="padding: 4px;" title="Take Profit">
-                                            <input type="text" id="quick-strat-bear-sl" class="form-control" value="1" style="padding: 4px;" title="Stop Loss">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 10px; padding-top: 4px;">
-                                    <label class="checkbox-container" style="flex: 1;">
-                                        <input type="checkbox" id="quick-strat-require-alt" checked>
-                                        <span class="checkmark"></span>
-                                        Require Alt Swings
-                                    </label>
-                                    <label class="checkbox-container" style="flex: 1;">
-                                        <input type="checkbox" id="quick-strat-recalc-extreme">
-                                        <span class="checkmark"></span>
-                                        Recalc Outliers
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Column 3: Advanced Filters & Deployment -->
-                            <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 8px;">
-                                <h3 style="font-size: 13px; font-weight: 700; color: var(--tv-text-bright); border-bottom: 1px solid var(--tv-border); padding-bottom: 6px; margin-bottom: 4px;">Strategy Filters</h3>
-                                
-                                <!-- Trend Filter -->
-                                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="quick-strat-use-trend" checked>
-                                        <span class="checkmark"></span>
-                                        <strong>EMA Trend Filter</strong>
-                                    </label>
-                                    <div style="display: flex; gap: 4px; width: 120px;">
-                                        <input type="number" id="quick-strat-trend-len" class="form-control" value="50" style="padding: 2px 4px;" title="MA Length">
-                                        <select id="quick-strat-trend-ma-type" class="form-control" style="padding: 2px 4px;">
-                                            <option value="EMA" selected>EMA</option>
-                                            <option value="SMA">SMA</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <!-- Candle Confirmation -->
-                                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="quick-strat-use-candle" checked>
-                                        <span class="checkmark"></span>
-                                        <strong>Candle Confirm</strong>
-                                    </label>
-                                    <div style="display: flex; gap: 4px; width: 120px;">
-                                        <select id="quick-strat-candle-type" class="form-control" style="padding: 2px 4px;">
-                                            <option value="Rejection Candle" selected>Wick Ratio</option>
-                                            <option value="Close Confirmation">Close Beyond</option>
-                                            <option value="Engulfing Candle">Engulfing</option>
-                                        </select>
-                                        <input type="number" step="0.05" id="quick-strat-wick-ratio" class="form-control" value="0.5" style="padding: 2px 4px;" title="Min Wick Ratio">
-                                    </div>
-                                </div>
-
-                                <!-- Hours Filter -->
-                                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="quick-strat-use-time-filter">
-                                        <span class="checkmark"></span>
-                                        <strong>Time Window</strong>
-                                    </label>
-                                    <div style="display: flex; gap: 4px; align-items: center;">
-                                        <input type="number" id="quick-strat-start-hour" class="form-control" value="8" style="width: 32px; padding: 2px;" title="Start Hour">
-                                        <span>:</span>
-                                        <input type="number" id="quick-strat-start-minute" class="form-control" value="0" style="width: 32px; padding: 2px;" title="Start Minute">
-                                        <span>-</span>
-                                        <input type="number" id="quick-strat-end-hour" class="form-control" value="16" style="width: 32px; padding: 2px;" title="End Hour">
-                                        <span>:</span>
-                                        <input type="number" id="quick-strat-end-minute" class="form-control" value="0" style="width: 32px; padding: 2px;" title="End Minute">
-                                    </div>
-                                </div>
-
-                                <!-- Market Open & ATR Filters -->
-                                <div style="display: flex; gap: 10px; align-items: center; margin-top: 4px;">
-                                    <label class="checkbox-container" style="font-size: 11px;">
-                                        <input type="checkbox" id="quick-strat-use-nt1" checked>
-                                        <span class="checkmark"></span>
-                                        Avoid US Open
-                                    </label>
-                                    <label class="checkbox-container" style="font-size: 11px;">
-                                        <input type="checkbox" id="quick-strat-use-consolidation">
-                                        <span class="checkmark"></span>
-                                        ATR Consolidation
-                                    </label>
-                                </div>
-
-                                <!-- Action Button -->
-                                <div style="margin-top: 8px;">
-                                    <button type="submit" class="tv-btn-primary" style="width: 100%; justify-content: center; padding: 8px;">
-                                        <i data-lucide="play-circle"></i>
-                                        <strong>Deploy Automated Bot Strategy</strong>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
             <!-- 4. Console Logs Pane -->
-            <div class="tv-dock-pane" id="dock-console">
+            <div class="tv-dock-pane active" id="dock-console">
                 <div class="tv-console-output" id="dock-console-logs">
                     <div class="tv-log-line">[SYSTEM] TradingView Hub initialized. Connected to Twelve Data and Telegram API.</div>
                 </div>
