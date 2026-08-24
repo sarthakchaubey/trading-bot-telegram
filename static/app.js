@@ -506,11 +506,13 @@ function setupTopbarEvents() {
     // Symbol Dropdown Selector Toggle
     const symBtn = document.getElementById("tv-symbol-selector-btn");
     const symDropdown = document.getElementById("tv-symbol-dropdown");
-    symBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        symDropdown.classList.toggle("active");
-    });
-    document.addEventListener("click", () => symDropdown.classList.remove("active"));
+    if (symBtn && symDropdown) {
+        symBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            symDropdown.classList.toggle("active");
+        });
+        document.addEventListener("click", () => symDropdown.classList.remove("active"));
+    }
 
     // Symbol Item Select
     document.querySelectorAll(".tv-dropdown-item").forEach(item => {
@@ -519,7 +521,7 @@ function setupTopbarEvents() {
             const symbol = item.getAttribute("data-symbol");
             const flag = item.getAttribute("data-flag");
             switchSymbol(symbol, flag);
-            symDropdown.classList.remove("active");
+            if (symDropdown) symDropdown.classList.remove("active");
         });
     });
 
@@ -535,78 +537,128 @@ function setupTopbarEvents() {
     });
 
     // Strategy Dropdown
-    document.getElementById("tv-strategy-select").addEventListener("change", (e) => {
-        state.currentStrategyType = e.target.value;
-        loadMainChartData();
-        showToast("Active strategy changed to " + e.target.options[e.target.selectedIndex].text, "info");
-    });
+    const strategySelect = document.getElementById("tv-strategy-select");
+    if (strategySelect) {
+        strategySelect.addEventListener("change", (e) => {
+            state.currentStrategyType = e.target.value;
+            loadMainChartData();
+            showToast("Active strategy changed to " + e.target.options[e.target.selectedIndex].text, "info");
+        });
+    }
 
     // Chart Style Buttons
-    document.getElementById("btn-chart-candles").addEventListener("click", () => setChartType("candles"));
-    document.getElementById("btn-chart-line").addEventListener("click", () => setChartType("line"));
-    document.getElementById("btn-chart-area").addEventListener("click", () => setChartType("area"));
+    const btnChartCandles = document.getElementById("btn-chart-candles");
+    if (btnChartCandles) {
+        btnChartCandles.addEventListener("click", () => setChartType("candles"));
+    }
+    const btnChartLine = document.getElementById("btn-chart-line");
+    if (btnChartLine) {
+        btnChartLine.addEventListener("click", () => setChartType("line"));
+    }
+    const btnChartArea = document.getElementById("btn-chart-area");
+    if (btnChartArea) {
+        btnChartArea.addEventListener("click", () => setChartType("area"));
+    }
 
     // Alert Button -> Telegram dispatch
-    document.getElementById("btn-dispatch-alert").addEventListener("click", triggerTelegramAlert);
+    const btnDispatchAlert = document.getElementById("btn-dispatch-alert");
+    if (btnDispatchAlert) {
+        btnDispatchAlert.addEventListener("click", triggerTelegramAlert);
+    }
 
     // Fullscreen Toggle
-    document.getElementById("btn-fullscreen").addEventListener("click", () => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
-            showToast("Entered Fullscreen mode.", "info");
-        } else {
-            document.exitFullscreen();
-        }
-    });
+    const btnFullscreen = document.getElementById("btn-fullscreen");
+    if (btnFullscreen) {
+        btnFullscreen.addEventListener("click", () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                showToast("Entered Fullscreen mode.", "info");
+            } else {
+                document.exitFullscreen();
+            }
+        });
+    }
 
     // Screenshot Snapshot
-    document.getElementById("btn-screenshot").addEventListener("click", takeChartScreenshot);
+    const btnScreenshot = document.getElementById("btn-screenshot");
+    if (btnScreenshot) {
+        btnScreenshot.addEventListener("click", takeChartScreenshot);
+    }
 
     // AI Close Button
-    document.getElementById("btn-close-ai").addEventListener("click", () => {
-        document.getElementById("tv-ai-banner").style.display = "none";
-    });
+    const btnCloseAi = document.getElementById("btn-close-ai");
+    if (btnCloseAi) {
+        btnCloseAi.addEventListener("click", () => {
+            const aiBanner = document.getElementById("tv-ai-banner");
+            if (aiBanner) aiBanner.style.display = "none";
+        });
+    }
 
     // Undo / Redo
-    document.getElementById("btn-undo").addEventListener("click", () => showToast("Undo action performed.", "info"));
-    document.getElementById("btn-redo").addEventListener("click", () => showToast("Redo action performed.", "info"));
+    const btnUndo = document.getElementById("btn-undo");
+    if (btnUndo) {
+        btnUndo.addEventListener("click", () => showToast("Undo action performed.", "info"));
+    }
+    const btnRedo = document.getElementById("btn-redo");
+    if (btnRedo) {
+        btnRedo.addEventListener("click", () => showToast("Redo action performed.", "info"));
+    }
 
     // Create Bot Shortcut
-    document.getElementById("btn-create-bot-modal").addEventListener("click", () => {
-        document.getElementById("strategy-modal").classList.add("active");
-    });
+    const btnCreateBotModal = document.getElementById("btn-create-bot-modal");
+    if (btnCreateBotModal) {
+        btnCreateBotModal.addEventListener("click", () => {
+            const stratModal = document.getElementById("strategy-modal");
+            if (stratModal) stratModal.classList.add("active");
+        });
+    }
 }
 
 function setupMainMenuEvents() {
     const menuBtn = document.getElementById("btn-tv-menu");
     const menuDropdown = document.getElementById("tv-main-menu-dropdown");
 
-    menuBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        menuDropdown.classList.toggle("active");
-    });
-    document.addEventListener("click", () => menuDropdown.classList.remove("active"));
+    if (menuBtn && menuDropdown) {
+        menuBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            menuDropdown.classList.toggle("active");
+        });
+        document.addEventListener("click", () => menuDropdown.classList.remove("active"));
+    }
 
     // Menu Actions
-    document.getElementById("menu-save-layout").addEventListener("click", () => {
-        localStorage.setItem("tv_saved_layout", JSON.stringify({
-            symbol: state.currentSymbol,
-            tf: state.currentGranularity,
-            strategy: state.currentStrategyType
-        }));
-        showToast("Chart Layout saved to browser storage!", "success");
-    });
+    const menuSaveLayout = document.getElementById("menu-save-layout");
+    if (menuSaveLayout) {
+        menuSaveLayout.addEventListener("click", () => {
+            localStorage.setItem("tv_saved_layout", JSON.stringify({
+                symbol: state.currentSymbol,
+                tf: state.currentGranularity,
+                strategy: state.currentStrategyType
+            }));
+            showToast("Chart Layout saved to browser storage!", "success");
+        });
+    }
 
-    document.getElementById("menu-export-csv").addEventListener("click", exportCandlesCSV);
+    const menuExportCsv = document.getElementById("menu-export-csv");
+    if (menuExportCsv) {
+        menuExportCsv.addEventListener("click", exportCandlesCSV);
+    }
 
-    document.getElementById("menu-refresh-data").addEventListener("click", () => {
-        loadMainChartData(true);
-        showToast("Market data refreshed from Twelve Data API.", "success");
-    });
+    const menuRefreshData = document.getElementById("menu-refresh-data");
+    if (menuRefreshData) {
+        menuRefreshData.addEventListener("click", () => {
+            loadMainChartData(true);
+            showToast("Market data refreshed from Twelve Data API.", "success");
+        });
+    }
 
-    document.getElementById("menu-shortcuts").addEventListener("click", () => {
-        document.getElementById("modal-shortcuts").classList.add("active");
-    });
+    const menuShortcuts = document.getElementById("menu-shortcuts");
+    if (menuShortcuts) {
+        menuShortcuts.addEventListener("click", () => {
+            const modalShortcuts = document.getElementById("modal-shortcuts");
+            if (modalShortcuts) modalShortcuts.classList.add("active");
+        });
+    }
 }
 
 function exportCandlesCSV() {
@@ -777,78 +829,94 @@ function setupReplayEvents() {
     const closeBtn = document.getElementById("btn-replay-close");
     const speedSelect = document.getElementById("select-replay-speed");
 
-    replayTrigger.addEventListener("click", () => {
-        if (state.currentCandles.length < 20) {
-            showToast("Need at least 20 candles for replay.", "warning");
-            return;
-        }
-        state.replayActive = true;
-        state.replayIndex = Math.max(10, Math.floor(state.currentCandles.length * 0.4));
-        replayBar.style.display = "flex";
-        renderReplayStep();
-        showToast("Bar Replay Simulator started.", "info");
-    });
+    if (replayTrigger) {
+        replayTrigger.addEventListener("click", () => {
+            if (state.currentCandles.length < 20) {
+                showToast("Need at least 20 candles for replay.", "warning");
+                return;
+            }
+            state.replayActive = true;
+            state.replayIndex = Math.max(10, Math.floor(state.currentCandles.length * 0.4));
+            if (replayBar) replayBar.style.display = "flex";
+            renderReplayStep();
+            showToast("Bar Replay Simulator started.", "info");
+        });
+    }
 
-    closeBtn.addEventListener("click", () => {
-        state.replayActive = false;
-        if (state.replayInterval) clearInterval(state.replayInterval);
-        state.replayInterval = null;
-        replayBar.style.display = "none";
-        loadMainChartData();
-        showToast("Exited Bar Replay mode.", "info");
-    });
-
-    playBtn.addEventListener("click", () => {
-        if (state.replayInterval) {
-            clearInterval(state.replayInterval);
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+            state.replayActive = false;
+            if (state.replayInterval) clearInterval(state.replayInterval);
             state.replayInterval = null;
-            playIcon.setAttribute("data-lucide", "play");
-            if (window.lucide) lucide.createIcons();
-        } else {
-            playIcon.setAttribute("data-lucide", "pause");
-            if (window.lucide) lucide.createIcons();
-            state.replayInterval = setInterval(() => {
-                if (state.replayIndex < state.currentCandles.length) {
-                    state.replayIndex++;
-                    renderReplayStep();
-                } else {
-                    clearInterval(state.replayInterval);
-                    state.replayInterval = null;
-                    playIcon.setAttribute("data-lucide", "play");
-                    if (window.lucide) lucide.createIcons();
-                    showToast("Replay reached the latest bar.", "success");
+            if (replayBar) replayBar.style.display = "none";
+            loadMainChartData();
+            showToast("Exited Bar Replay mode.", "info");
+        });
+    }
+
+    if (playBtn) {
+        playBtn.addEventListener("click", () => {
+            if (state.replayInterval) {
+                clearInterval(state.replayInterval);
+                state.replayInterval = null;
+                if (playIcon) playIcon.setAttribute("data-lucide", "play");
+                if (window.lucide) lucide.createIcons();
+            } else {
+                if (playIcon) playIcon.setAttribute("data-lucide", "pause");
+                if (window.lucide) lucide.createIcons();
+                state.replayInterval = setInterval(() => {
+                    if (state.replayIndex < state.currentCandles.length) {
+                        state.replayIndex++;
+                        renderReplayStep();
+                    } else {
+                        clearInterval(state.replayInterval);
+                        state.replayInterval = null;
+                        if (playIcon) playIcon.setAttribute("data-lucide", "play");
+                        if (window.lucide) lucide.createIcons();
+                        showToast("Replay reached the latest bar.", "success");
+                    }
+                }, state.replaySpeed);
+            }
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener("click", () => {
+            if (state.replayIndex < state.currentCandles.length) {
+                state.replayIndex++;
+                renderReplayStep();
+            }
+        });
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener("click", () => {
+            if (state.replayIndex > 5) {
+                state.replayIndex--;
+                renderReplayStep();
+            }
+        });
+    }
+
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            state.replayIndex = 10;
+            renderReplayStep();
+        });
+    }
+
+    if (speedSelect) {
+        speedSelect.addEventListener("change", (e) => {
+            state.replaySpeed = parseInt(e.target.value);
+            if (state.replayInterval) {
+                clearInterval(state.replayInterval);
+                if (playBtn) {
+                    playBtn.click();
+                    playBtn.click();
                 }
-            }, state.replaySpeed);
-        }
-    });
-
-    nextBtn.addEventListener("click", () => {
-        if (state.replayIndex < state.currentCandles.length) {
-            state.replayIndex++;
-            renderReplayStep();
-        }
-    });
-
-    prevBtn.addEventListener("click", () => {
-        if (state.replayIndex > 5) {
-            state.replayIndex--;
-            renderReplayStep();
-        }
-    });
-
-    startBtn.addEventListener("click", () => {
-        state.replayIndex = 10;
-        renderReplayStep();
-    });
-
-    speedSelect.addEventListener("change", (e) => {
-        state.replaySpeed = parseInt(e.target.value);
-        if (state.replayInterval) {
-            clearInterval(state.replayInterval);
-            playBtn.click();
-            playBtn.click();
-        }
-    });
+            }
+        });
+    }
 }
 
 function renderReplayStep() {
@@ -1356,115 +1424,147 @@ function setupModalsEvents() {
     });
 
     // Indicators Modal Trigger
-    document.getElementById("btn-tv-indicators").addEventListener("click", () => {
-        document.getElementById("modal-indicators").classList.add("active");
-    });
+    const btnIndicators = document.getElementById("btn-tv-indicators");
+    if (btnIndicators) {
+        btnIndicators.addEventListener("click", () => {
+            const modalInd = document.getElementById("modal-indicators");
+            if (modalInd) modalInd.classList.add("active");
+        });
+    }
 
     // Indicators Checkbox Handlers
-    document.getElementById("ind-ema50").addEventListener("change", (e) => {
-        state.indicators.ema50 = e.target.checked;
-        if (state.ema50Series) state.ema50Series.applyOptions({ visible: e.target.checked });
-    });
-    document.getElementById("ind-ema200").addEventListener("change", (e) => {
-        state.indicators.ema200 = e.target.checked;
-        if (state.ema200Series) state.ema200Series.applyOptions({ visible: e.target.checked });
-    });
-    document.getElementById("ind-fib").addEventListener("change", (e) => {
-        state.indicators.fib = e.target.checked;
-        if (!e.target.checked) clearFibLines();
-        else loadMainChartData();
-    });
-    document.getElementById("ind-volume").addEventListener("change", (e) => {
-        state.indicators.volume = e.target.checked;
-        if (state.volumeSeries) state.volumeSeries.applyOptions({ visible: e.target.checked });
-    });
+    const indEma50 = document.getElementById("ind-ema50");
+    if (indEma50) {
+        indEma50.addEventListener("change", (e) => {
+            state.indicators.ema50 = e.target.checked;
+            if (state.ema50Series) state.ema50Series.applyOptions({ visible: e.target.checked });
+        });
+    }
+    const indEma200 = document.getElementById("ind-ema200");
+    if (indEma200) {
+        indEma200.addEventListener("change", (e) => {
+            state.indicators.ema200 = e.target.checked;
+            if (state.ema200Series) state.ema200Series.applyOptions({ visible: e.target.checked });
+        });
+    }
+    const indFib = document.getElementById("ind-fib");
+    if (indFib) {
+        indFib.addEventListener("change", (e) => {
+            state.indicators.fib = e.target.checked;
+            if (!e.target.checked) clearFibLines();
+            else loadMainChartData();
+        });
+    }
+    const indVolume = document.getElementById("ind-volume");
+    if (indVolume) {
+        indVolume.addEventListener("change", (e) => {
+            state.indicators.volume = e.target.checked;
+            if (state.volumeSeries) state.volumeSeries.applyOptions({ visible: e.target.checked });
+        });
+    }
 
     // Chart Settings Modal Trigger
-    document.getElementById("btn-chart-settings").addEventListener("click", () => {
-        document.getElementById("modal-settings").classList.add("active");
-    });
+    const btnChartSettings = document.getElementById("btn-chart-settings");
+    if (btnChartSettings) {
+        btnChartSettings.addEventListener("click", () => {
+            const modalSettings = document.getElementById("modal-settings");
+            if (modalSettings) modalSettings.classList.add("active");
+        });
+    }
 
-    document.getElementById("btn-save-chart-settings").addEventListener("click", () => {
-        const up = document.getElementById("set-up-color").value;
-        const down = document.getElementById("set-down-color").value;
-        const wm = document.getElementById("set-watermark").checked;
-        
-        state.chartColors.upColor = up;
-        state.chartColors.downColor = down;
-        state.chartColors.watermark = wm;
+    const btnSaveChartSettings = document.getElementById("btn-save-chart-settings");
+    if (btnSaveChartSettings) {
+        btnSaveChartSettings.addEventListener("click", () => {
+            const upEl = document.getElementById("set-up-color");
+            const downEl = document.getElementById("set-down-color");
+            const wmEl = document.getElementById("set-watermark");
+            
+            const up = upEl ? upEl.value : "#089981";
+            const down = downEl ? downEl.value : "#f23645";
+            const wm = wmEl ? wmEl.checked : true;
+            
+            state.chartColors.upColor = up;
+            state.chartColors.downColor = down;
+            state.chartColors.watermark = wm;
 
-        if (state.candlestickSeries) {
-            state.candlestickSeries.applyOptions({
-                upColor: up,
-                downColor: down,
-                wickUpColor: up,
-                wickDownColor: down
-            });
-        }
-        if (state.chart) {
-            state.chart.applyOptions({
-                watermark: { visible: wm }
-            });
-        }
+            if (state.candlestickSeries) {
+                state.candlestickSeries.applyOptions({
+                    upColor: up,
+                    downColor: down,
+                    wickUpColor: up,
+                    wickDownColor: down
+                });
+            }
+            if (state.chart) {
+                state.chart.applyOptions({
+                    watermark: { visible: wm }
+                });
+            }
 
-        document.getElementById("modal-settings").classList.remove("active");
-        showToast("Chart properties saved!", "success");
-    });
+            const modalSettings = document.getElementById("modal-settings");
+            if (modalSettings) modalSettings.classList.remove("active");
+            showToast("Chart properties saved!", "success");
+        });
+    }
 
     // Strategy Modal Form submission
-    document.getElementById("strategy-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const payload = {
-            id: "strat_" + Math.random().toString(36).substr(2, 9),
-            status: "active",
-            name: document.getElementById("strat-name").value,
-            instrument: document.getElementById("strat-instrument").value,
-            granularity: document.getElementById("strat-granularity").value,
-            telegram_enabled: document.getElementById("strat-telegram").checked,
-            price_source: document.getElementById("strat-price-source").value,
-            signal_level: document.getElementById("strat-signal-level").value,
-            strategy_type: document.getElementById("strat-type").value,
-            bull_tp_level: document.getElementById("strat-bull-tp").value,
-            bull_sl_level: document.getElementById("strat-bull-sl").value,
-            bear_tp_level: document.getElementById("strat-bear-tp").value,
-            bear_sl_level: document.getElementById("strat-bear-sl").value,
-            left_bars: parseInt(document.getElementById("strat-left-bars").value),
-            right_bars: parseInt(document.getElementById("strat-right-bars").value),
-            min_swing_size: parseFloat(document.getElementById("strat-min-swing-size").value),
-            min_fib_range: parseFloat(document.getElementById("strat-min-fib-range").value),
-            min_bars_between_swings: 1,
-            require_alternating_swings: document.getElementById("strat-require-alt").checked,
-            recalculate_on_extreme: document.getElementById("strat-recalc-extreme").checked,
-            use_time_filter: document.getElementById("strat-use-time-filter").checked,
-            start_hour: 8, start_minute: 0, end_hour: 16, end_minute: 0,
-            use_no_trade_1: true, nt1_start_hour: 9, nt1_start_minute: 30, nt1_end_hour: 10, nt1_end_minute: 0,
-            use_no_trade_2: false, nt2_start_hour: 0, nt2_start_minute: 0, nt2_end_hour: 0, nt2_end_minute: 0,
-            use_trend_filter: document.getElementById("strat-use-trend").checked,
-            trend_ma_type: document.getElementById("strat-trend-ma-type").value,
-            trend_length: parseInt(document.getElementById("strat-trend-len").value),
-            trend_slope_bars: 5,
-            minimum_slope: parseFloat(document.getElementById("strat-trend-slope").value),
-            use_candle_confirmation: document.getElementById("strat-use-candle").checked,
-            confirmation_type: document.getElementById("strat-candle-type").value,
-            minimum_wick_ratio: parseFloat(document.getElementById("strat-wick-ratio").value),
-            use_consolidation_filter: document.getElementById("strat-use-consolidation").checked,
-            consolidation_length: 20, consolidation_atr_length: 14, max_consolidation_atr: 3.0
-        };
+    const strategyForm = document.getElementById("strategy-form");
+    if (strategyForm) {
+        strategyForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const payload = {
+                id: "strat_" + Math.random().toString(36).substr(2, 9),
+                status: "active",
+                name: document.getElementById("strat-name").value,
+                instrument: document.getElementById("strat-instrument").value,
+                granularity: document.getElementById("strat-granularity").value,
+                telegram_enabled: document.getElementById("strat-telegram").checked,
+                price_source: document.getElementById("strat-price-source").value,
+                signal_level: document.getElementById("strat-signal-level").value,
+                strategy_type: document.getElementById("strat-type").value,
+                bull_tp_level: document.getElementById("strat-bull-tp").value,
+                bull_sl_level: document.getElementById("strat-bull-sl").value,
+                bear_tp_level: document.getElementById("strat-bear-tp").value,
+                bear_sl_level: document.getElementById("strat-bear-sl").value,
+                left_bars: parseInt(document.getElementById("strat-left-bars").value),
+                right_bars: parseInt(document.getElementById("strat-right-bars").value),
+                min_swing_size: parseFloat(document.getElementById("strat-min-swing-size").value),
+                min_fib_range: parseFloat(document.getElementById("strat-min-fib-range").value),
+                min_bars_between_swings: 1,
+                require_alternating_swings: document.getElementById("strat-require-alt").checked,
+                recalculate_on_extreme: document.getElementById("strat-recalc-extreme").checked,
+                use_time_filter: document.getElementById("strat-use-time-filter").checked,
+                start_hour: 8, start_minute: 0, end_hour: 16, end_minute: 0,
+                use_no_trade_1: true, nt1_start_hour: 9, nt1_start_minute: 30, nt1_end_hour: 10, nt1_end_minute: 0,
+                use_no_trade_2: false, nt2_start_hour: 0, nt2_start_minute: 0, nt2_end_hour: 0, nt2_end_minute: 0,
+                use_trend_filter: document.getElementById("strat-use-trend").checked,
+                trend_ma_type: document.getElementById("strat-trend-ma-type").value,
+                trend_length: parseInt(document.getElementById("strat-trend-len").value),
+                trend_slope_bars: 5,
+                minimum_slope: parseFloat(document.getElementById("strat-trend-slope").value),
+                use_candle_confirmation: document.getElementById("strat-use-candle").checked,
+                confirmation_type: document.getElementById("strat-candle-type").value,
+                minimum_wick_ratio: parseFloat(document.getElementById("strat-wick-ratio").value),
+                use_consolidation_filter: document.getElementById("strat-use-consolidation").checked,
+                consolidation_length: 20, consolidation_atr_length: 14, max_consolidation_atr: 3.0
+            };
 
-        try {
-            await fetch(API_BASE + "/api/strategies", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-            document.getElementById("strategy-modal").classList.remove("active");
-            fetchStrategies();
-            fetchBotStatuses();
-            showToast("Automated Strategy deployed successfully!", "success");
-        } catch (err) {
-            showToast("Error saving strategy: " + err.message, "danger");
-        }
-    });
+            try {
+                await fetch(API_BASE + "/api/strategies", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const modalStrat = document.getElementById("strategy-modal");
+                if (modalStrat) modalStrat.classList.remove("active");
+                fetchStrategies();
+                fetchBotStatuses();
+                showToast("Automated Strategy deployed successfully!", "success");
+            } catch (err) {
+                showToast("Error saving strategy: " + err.message, "danger");
+            }
+        });
+    }
 
     // Modal Tabs
     document.querySelectorAll(".tab-btn").forEach(b => {
@@ -1472,7 +1572,8 @@ function setupModalsEvents() {
             document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
             document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
             b.classList.add("active");
-            document.getElementById(b.getAttribute("data-tab")).classList.add("active");
+            const targetPane = document.getElementById(b.getAttribute("data-tab"));
+            if (targetPane) targetPane.classList.add("active");
         });
     });
 }
