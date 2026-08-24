@@ -3,418 +3,788 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Swing Fibonacci Trading Hub</title>
+    <title>TradingView Hub — Professional Technical Analysis & Automated Execution</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Chart.js CDN -->
+    
+    <!-- TradingView Lightweight Charts (Official Standalone Production Bundle) -->
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <!-- Chart.js for Bottom Strategy Tester Equity Curve -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Luxon + Luxon adapter for Chart.js + financial charts -->
-    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.js"></script>
+    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="logo-area">
-                <div class="logo-icon">
-                    <i data-lucide="activity" class="glow-icon"></i>
-                </div>
-                <h2>FibHub <span>v1.0</span></h2>
-            </div>
-            
-            <nav class="nav-links">
-                <a href="#" class="nav-item active" data-view="dashboard">
-                    <i data-lucide="layout-dashboard"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="#" class="nav-item" data-view="strategies">
-                    <i data-lucide="sliders"></i>
-                    <span>Strategies</span>
-                </a>
-                <a href="#" class="nav-item" data-view="backtesting">
-                    <i data-lucide="line-chart"></i>
-                    <span>Backtesting</span>
-                </a>
-            </nav>
+<body class="tv-body">
+    <!-- Toast Notification Container -->
+    <div id="tv-toast-container" class="tv-toast-container"></div>
 
-            <div class="sidebar-footer">
-                <div class="connection-status">
-                    <span class="status-indicator online"></span>
-                    <span>System Connected</span>
+    <!-- Top Navigation & Chart Toolbar (TradingView Exact Header) -->
+    <header class="tv-topbar">
+        <!-- Brand & Hamburger Menu -->
+        <div class="tv-topbar-left">
+            <div class="tv-menu-wrapper" style="position: relative;">
+                <button class="tv-icon-btn" id="btn-tv-menu" title="Main Menu">
+                    <i data-lucide="menu"></i>
+                </button>
+                <!-- Main Menu Dropdown -->
+                <div class="tv-dropdown-menu" id="tv-main-menu-dropdown" style="left: 0; width: 220px;">
+                    <div class="tv-dropdown-header">TradingView Menu</div>
+                    <div class="tv-menu-item" id="menu-save-layout">
+                        <i data-lucide="save"></i> <span>Save Chart Layout</span>
+                    </div>
+                    <div class="tv-menu-item" id="menu-export-csv">
+                        <i data-lucide="download"></i> <span>Export Candles (CSV)</span>
+                    </div>
+                    <div class="tv-menu-item" id="menu-refresh-data">
+                        <i data-lucide="refresh-cw"></i> <span>Force Refresh Feed</span>
+                    </div>
+                    <div class="tv-menu-item" id="menu-shortcuts">
+                        <i data-lucide="keyboard"></i> <span>Keyboard Shortcuts</span>
+                    </div>
                 </div>
             </div>
+
+            <div class="tv-logo" id="btn-brand-logo">
+                <div class="tv-logo-mark">
+                    <span class="tv-mark-slash">//</span>
+                </div>
+                <span class="tv-logo-text">TradingView</span>
+                <span class="tv-logo-badge">PRO+</span>
+            </div>
+
+            <div class="tv-divider-v"></div>
+
+            <!-- Symbol Search Dropdown Box -->
+            <div class="tv-symbol-selector" id="tv-symbol-selector-btn">
+                <div class="tv-symbol-flag" id="tv-symbol-flag">🇪🇺🇺🇸</div>
+                <div class="tv-symbol-info">
+                    <span class="tv-symbol-name" id="tv-current-symbol">EUR/USD</span>
+                    <span class="tv-symbol-exchange">TWELVE DATA • FOREX</span>
+                </div>
+                <i data-lucide="chevron-down" class="tv-dropdown-icon"></i>
+
+                <!-- Symbol Search Dropdown Menu -->
+                <div class="tv-dropdown-menu" id="tv-symbol-dropdown">
+                    <div class="tv-dropdown-header">Select Instrument</div>
+                    <div class="tv-dropdown-item active" data-symbol="EUR_USD" data-flag="🇪🇺🇺🇸">
+                        <span class="tv-item-flag">🇪🇺🇺🇸</span>
+                        <div class="tv-item-text">
+                            <strong>EUR/USD</strong>
+                            <small>Euro / US Dollar</small>
+                        </div>
+                        <span class="tv-item-price" id="quote-price-EUR_USD">1.1680</span>
+                    </div>
+                    <div class="tv-dropdown-item" data-symbol="GBP_USD" data-flag="🇬🇧🇺🇸">
+                        <span class="tv-item-flag">🇬🇧🇺🇸</span>
+                        <div class="tv-item-text">
+                            <strong>GBP/USD</strong>
+                            <small>British Pound / US Dollar</small>
+                        </div>
+                        <span class="tv-item-price" id="quote-price-GBP_USD">1.3645</span>
+                    </div>
+                    <div class="tv-dropdown-item" data-symbol="USD_JPY" data-flag="🇺🇸🇯🇵">
+                        <span class="tv-item-flag">🇺🇸🇯🇵</span>
+                        <div class="tv-item-text">
+                            <strong>USD/JPY</strong>
+                            <small>US Dollar / Japanese Yen</small>
+                        </div>
+                        <span class="tv-item-price" id="quote-price-USD_JPY">154.20</span>
+                    </div>
+                    <div class="tv-dropdown-item" data-symbol="XAU_USD" data-flag="🪙🇺🇸">
+                        <span class="tv-item-flag">🪙🇺🇸</span>
+                        <div class="tv-item-text">
+                            <strong>XAU/USD</strong>
+                            <small>Gold Spot / US Dollar</small>
+                        </div>
+                        <span class="tv-item-price" id="quote-price-XAU_USD">4635.50</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tv-divider-v"></div>
+
+            <!-- Timeframe Selector Pills -->
+            <div class="tv-timeframe-group" id="tv-timeframe-group">
+                <button class="tv-tf-btn" data-tf="M1">1m</button>
+                <button class="tv-tf-btn" data-tf="M5">5m</button>
+                <button class="tv-tf-btn active" data-tf="M15">15m</button>
+                <button class="tv-tf-btn" data-tf="M30">30m</button>
+                <button class="tv-tf-btn" data-tf="H1">1h</button>
+                <button class="tv-tf-btn" data-tf="H4">4h</button>
+                <button class="tv-tf-btn" data-tf="D">1D</button>
+            </div>
+
+            <div class="tv-divider-v"></div>
+
+            <!-- Chart Style Switcher -->
+            <div class="tv-chart-type-selector">
+                <button class="tv-chart-type-btn active" id="btn-chart-candles" title="Candlestick Chart">
+                    <i data-lucide="candlestick-chart"></i>
+                </button>
+                <button class="tv-chart-type-btn" id="btn-chart-line" title="Line Chart">
+                    <i data-lucide="trending-up"></i>
+                </button>
+                <button class="tv-chart-type-btn" id="btn-chart-area" title="Area Chart">
+                    <i data-lucide="activity"></i>
+                </button>
+            </div>
+
+            <div class="tv-divider-v"></div>
+
+            <!-- Strategy & Indicators Button -->
+            <div class="tv-indicators-wrapper">
+                <button class="tv-tool-btn" id="btn-tv-indicators">
+                    <i data-lucide="function-square"></i>
+                    <span>Indicators</span>
+                </button>
+                <div class="tv-strategy-badge-select">
+                    <select id="tv-strategy-select" class="tv-select-input">
+                        <option value="Fibonacci">Strategy: Swing Fibonacci (0.618)</option>
+                        <option value="MomentumBreakout">Strategy: Momentum Breakout (EMA+RSI)</option>
+                        <option value="AIClaude">Strategy: Claude AI Market Analyst</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Right Controls -->
+        <div class="tv-topbar-right">
+            <!-- Alert Button -->
+            <button class="tv-action-pill btn-telegram-alert" id="btn-dispatch-alert" title="Dispatch Live Alert to Telegram">
+                <i data-lucide="bell"></i>
+                <span>Alert</span>
+            </button>
+
+            <!-- Replay Simulator -->
+            <button class="tv-action-pill" id="btn-bar-replay" title="Step-by-Step Bar Replay">
+                <i data-lucide="play-circle"></i>
+                <span>Replay</span>
+            </button>
+
+            <div class="tv-divider-v"></div>
+
+            <button class="tv-icon-btn" id="btn-undo" title="Undo (Ctrl+Z)"><i data-lucide="undo-2"></i></button>
+            <button class="tv-icon-btn" id="btn-redo" title="Redo (Ctrl+Y)"><i data-lucide="redo-2"></i></button>
+            
+            <div class="tv-divider-v"></div>
+
+            <button class="tv-icon-btn" id="btn-chart-settings" title="Chart Settings"><i data-lucide="settings"></i></button>
+            <button class="tv-icon-btn" id="btn-fullscreen" title="Toggle Fullscreen"><i data-lucide="maximize-2"></i></button>
+            <button class="tv-icon-btn" id="btn-screenshot" title="Take Snapshot"><i data-lucide="camera"></i></button>
+
+            <!-- Quick Add Strategy Modal Trigger -->
+            <button class="tv-btn-primary" id="btn-create-bot-modal">
+                <i data-lucide="plus"></i>
+                <span>Deploy Bot</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Floating Bar Replay Controls Bar (Hidden by Default) -->
+    <div class="tv-replay-toolbar" id="tv-replay-bar" style="display: none;">
+        <div class="replay-label"><i data-lucide="play-circle"></i> Bar Replay Simulator</div>
+        <div class="replay-controls">
+            <button class="tv-replay-btn" id="btn-replay-start" title="Jump to Beginning"><i data-lucide="skip-back"></i></button>
+            <button class="tv-replay-btn" id="btn-replay-prev" title="Step Backward"><i data-lucide="chevron-left"></i></button>
+            <button class="tv-replay-btn primary" id="btn-replay-toggle-play" title="Play / Pause"><i data-lucide="play" id="icon-replay-play"></i></button>
+            <button class="tv-replay-btn" id="btn-replay-next" title="Step Forward (1 Bar)"><i data-lucide="chevron-right"></i></button>
+            <select id="select-replay-speed" class="tv-select-sm">
+                <option value="1000">1x (1s)</option>
+                <option value="500" selected>2x (0.5s)</option>
+                <option value="200">5x (0.2s)</option>
+            </select>
+        </div>
+        <div class="replay-bar-info" id="replay-bar-info">Bar 0 / 0</div>
+        <button class="tv-replay-btn text-red" id="btn-replay-close" title="Exit Replay Mode"><i data-lucide="x"></i></button>
+    </div>
+
+    <!-- Main Workspace Container (Left Tools + Center Chart Canvas + Right Sidebar) -->
+    <div class="tv-workspace">
+        
+        <!-- Left Toolbar: Drawing & Charting Tools -->
+        <aside class="tv-left-toolbar">
+            <button class="tv-draw-tool active" id="tool-cursor" title="Crosshair (C)"><i data-lucide="crosshair"></i></button>
+            <button class="tv-draw-tool" id="tool-trendline" title="Trend Line (Alt+T)"><i data-lucide="slash"></i></button>
+            <button class="tv-draw-tool" id="tool-fib" title="Fibonacci Retracement (Alt+F)"><i data-lucide="git-commit"></i></button>
+            <button class="tv-draw-tool" id="tool-brush" title="Brush / Highlight"><i data-lucide="pencil"></i></button>
+            <button class="tv-draw-tool" id="tool-text" title="Text Note"><i data-lucide="type"></i></button>
+            <button class="tv-draw-tool" id="tool-position" title="Long/Short Risk Reward Tool"><i data-lucide="shield-alert"></i></button>
+            <button class="tv-draw-tool" id="tool-ruler" title="Measure Distance & Pips"><i data-lucide="ruler"></i></button>
+            
+            <div class="tv-tool-separator"></div>
+
+            <button class="tv-draw-tool" id="tool-magnet" title="Magnet Mode (Snaps to OHLC)"><i data-lucide="magnet"></i></button>
+            <button class="tv-draw-tool" id="tool-lock" title="Lock All Drawing Tools"><i data-lucide="lock"></i></button>
+            <button class="tv-draw-tool" id="tool-hide" title="Hide All Indicators"><i data-lucide="eye"></i></button>
+            <button class="tv-draw-tool text-red" id="tool-trash" title="Remove Drawings & Overlays"><i data-lucide="trash-2"></i></button>
         </aside>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Top Header -->
-            <header class="header">
-                <div class="header-title">
-                    <h1 id="page-title">Dashboard Overview</h1>
-                    <p id="page-subtitle">Real-time status and alerts summary</p>
+        <!-- Center Chart Area -->
+        <main class="tv-chart-area">
+            <!-- Chart Floating OHLC & Legend Status Header -->
+            <div class="tv-legend-bar">
+                <div class="tv-legend-symbol">
+                    <strong id="legend-symbol">EUR/USD</strong>
+                    <span class="tv-legend-tf" id="legend-tf">15</span>
+                    <span class="tv-legend-dot">•</span>
+                    <span class="tv-legend-feed">Twelve Data</span>
                 </div>
-                <div class="header-actions">
-                    <button class="btn btn-primary" id="btn-create-strategy-shortcut">
-                        <i data-lucide="plus"></i> New Strategy
-                    </button>
+                <div class="tv-legend-ohlc" id="legend-ohlc">
+                    <span>O <strong id="legend-open">-</strong></span>
+                    <span>H <strong id="legend-high">-</strong></span>
+                    <span>L <strong id="legend-low">-</strong></span>
+                    <span>C <strong id="legend-close">-</strong></span>
+                    <span class="tv-legend-diff" id="legend-diff">-</span>
+                    <span>Vol <strong id="legend-vol">-</strong></span>
                 </div>
-            </header>
-
-            <!-- Dashboard View -->
-            <section id="view-dashboard" class="content-view active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon bg-blue"><i data-lucide="cpu"></i></div>
-                        <div class="stat-details">
-                            <h3>Active Bots</h3>
-                            <p class="stat-value" id="stat-active-bots">0</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon bg-green"><i data-lucide="bell"></i></div>
-                        <div class="stat-details">
-                            <h3>Total Signals</h3>
-                            <p class="stat-value" id="stat-total-signals">0</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon bg-purple"><i data-lucide="clock"></i></div>
-                        <div class="stat-details">
-                            <h3>Last Active Check</h3>
-                            <p class="stat-value" id="stat-last-check">Never</p>
-                        </div>
-                    </div>
-                    <div class="stat-card donut-stat-card">
-                        <div class="donut-chart-container">
-                            <canvas id="signals-donut-chart"></canvas>
-                        </div>
-                        <div class="stat-details">
-                            <h3>BUY/SELL Ratio</h3>
-                            <p class="stat-value" id="stat-signal-ratio">0:0</p>
-                        </div>
-                    </div>
+                <div class="tv-legend-strategy-status" id="legend-strategy-badge">
+                    <span class="status-pulse online"></span>
+                    <span id="legend-strategy-text">Swing Fib Ready</span>
                 </div>
+            </div>
 
-                <!-- Interactive Trade Terminal -->
-                <div class="card mb-4">
-                    <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
-                        <h2 style="display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="candlestick-chart" style="color: var(--primary);"></i>
-                            Interactive Trade Terminal
-                        </h2>
-                        <div class="card-actions" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 12px; color: var(--text-muted);">Instrument:</label>
-                                <select id="terminal-instrument" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
-                                    <option value="EUR_USD">EUR_USD</option>
-                                    <option value="GBP_USD">GBP_USD</option>
-                                    <option value="USD_JPY">USD_JPY</option>
-                                    <option value="XAU_USD">XAU_USD</option>
-                                </select>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 12px; color: var(--text-muted);">Time Frame:</label>
-                                <select id="terminal-granularity" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
-                                    <option value="M1">M1 (1m)</option>
-                                    <option value="M5">M5 (5m)</option>
-                                    <option value="M15" selected>M15 (15m)</option>
-                                    <option value="M30">M30 (30m)</option>
-                                    <option value="H1">H1 (1h)</option>
-                                    <option value="H4">H4 (4h)</option>
-                                    <option value="D">D (1d)</option>
-                                </select>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 12px; color: var(--text-muted);">Strategy:</label>
-                                <select id="terminal-strategy" class="form-control-sm" style="background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 8px; cursor: pointer;">
-                                    <option value="Fibonacci">Swing Fibonacci</option>
-                                    <option value="MomentumBreakout">Momentum Breakout</option>
-                                    <option value="AIClaude">Claude AI Analyst</option>
-                                </select>
-                            </div>
-                            <button id="btn-terminal-load" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; border-radius: 6px;">
-                                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Update Chart
-                            </button>
-                            <button id="btn-terminal-trade" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; background-color: var(--success); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);">
-                                <i data-lucide="play" style="width: 14px; height: 14px;"></i> Start Trading
-                            </button>
-                        </div>
+            <!-- Active Strategy Reasoning Banner (Appears when Claude AI Analyst is queried) -->
+            <div class="tv-ai-reasoning-banner" id="tv-ai-banner" style="display: none;">
+                <div class="tv-ai-banner-header">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="sparkles" style="color: #a855f7; width: 15px; height: 15px;"></i>
+                        <strong>Claude 3.7 AI Technical Analyst Commentary</strong>
                     </div>
-                    <div class="card-body">
-                        <div class="chart-container" style="position: relative; height: 350px; width: 100%;">
-                            <canvas id="terminal-price-chart"></canvas>
-                        </div>
-                        <div class="mt-2" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-                            <span id="terminal-status-text">Select parameters and click "Update Chart" to load history and strategy signals.</span>
-                            <span id="terminal-metrics-text"></span>
-                        </div>
-                        <!-- AI Reasoning Panel -->
-                        <div id="ai-reasoning-container" style="display: none; margin-top: 16px; padding: 16px; border-radius: 8px; background: rgba(99, 102, 241, 0.06); border: 1px dashed var(--primary); font-family: 'Inter', sans-serif; transition: all 0.3s ease;">
-                            <h3 style="font-size: 13px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; margin-top: 0;">
-                                <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i> Claude AI Technical Analysis
-                            </h3>
-                            <p id="ai-reasoning-text" style="font-size: 12px; line-height: 1.6; color: var(--text-main); margin: 0; white-space: pre-line;"></p>
-                        </div>
-                    </div>
+                    <button class="tv-close-ai" id="btn-close-ai"><i data-lucide="x"></i></button>
                 </div>
+                <p id="tv-ai-reasoning-text">Analyzing market context...</p>
+            </div>
 
-                <div class="dashboard-columns">
-                    <!-- Left: Active Bots & Logs -->
-                    <div class="dash-column">
-                        <div class="card">
-                            <div class="card-header">
-                                <h2>Active Bot Statuses</h2>
-                                <i data-lucide="refresh-cw" class="icon-btn" id="refresh-status"></i>
-                            </div>
-                            <div class="card-body" id="active-bots-list">
-                                <!-- Dynamic Bot List Cards -->
-                                <p class="empty-message">No strategies configured yet.</p>
-                            </div>
-                        </div>
+            <!-- The TradingView Lightweight Charts DOM Mount Point -->
+            <div id="tv-chart-container" class="tv-chart-container"></div>
+        </main>
 
-                        <div class="card mt-4">
-                            <div class="card-header">
-                                <h2>Bot Console Logs</h2>
-                                <div class="card-actions">
-                                    <select id="log-strategy-select" class="form-control-sm">
-                                        <option value="">Select Strategy</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="console-terminal" id="terminal-logs">
-                                    <p class="text-muted">// Select an active strategy above to view live logs...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Right Multi-Tool Sidebar (Watchlist, Quick Order Entry, AI Commentary, Signals) -->
+        <aside class="tv-right-sidebar" id="tv-right-sidebar">
+            <!-- Vertical Tab Strip -->
+            <div class="tv-sidebar-tabs">
+                <button class="tv-side-tab active" data-tab="tab-watchlist" title="Watchlist & Quotes">
+                    <i data-lucide="list"></i>
+                </button>
+                <button class="tv-side-tab" data-tab="tab-trade" title="Quick Order Ticket & Trade">
+                    <i data-lucide="arrow-left-right"></i>
+                </button>
+                <button class="tv-side-tab" data-tab="tab-ai" title="Claude AI Analyst Assistant">
+                    <i data-lucide="sparkles"></i>
+                </button>
+                <button class="tv-side-tab" data-tab="tab-alerts" title="Telegram Signals Stream">
+                    <i data-lucide="bell"></i>
+                </button>
+                <button class="tv-side-tab" data-tab="tab-bots" title="Bot Workers Status">
+                    <i data-lucide="cpu"></i>
+                </button>
+            </div>
 
-                    <!-- Right: Live Signals Log -->
-                    <div class="dash-column">
-                        <div class="card h-full">
-                            <div class="card-header">
-                                <h2>Signals History</h2>
-                                <i data-lucide="history" class="icon-btn"></i>
-                            </div>
-                            <div class="card-body p-0 max-h-lg overflow-y">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>Type</th>
-                                                <th>Strategy</th>
-                                                <th>Instrument</th>
-                                                <th>Entry</th>
-                                                <th>Time</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="signals-log-tbody">
-                                            <tr>
-                                                <td colspan="5" class="text-center py-4 text-muted">No signals captured yet.</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Strategies View -->
-            <section id="view-strategies" class="content-view">
-                <div class="strategies-toolbar">
-                    <h2>Configured Strategies</h2>
-                    <button class="btn btn-primary" id="btn-add-strategy">
-                        <i data-lucide="plus"></i> Add Strategy
-                    </button>
-                </div>
-                <div class="strategies-grid" id="strategies-card-grid">
-                    <!-- Dynamic Strategy Cards -->
-                </div>
-            </section>
-
-            <!-- Backtesting View -->
-            <section id="view-backtesting" class="content-view">
-                <div class="card">
-                    <div class="card-body">
-                        <form id="backtest-form">
-                            <div class="backtest-form-layout">
-                                <div class="form-group">
-                                    <label for="backtest-strat-select">Primary Strategy</label>
-                                    <select id="backtest-strat-select" class="form-control" required>
-                                        <option value="">Choose Strategy</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="backtest-instrument">Instrument (Override)</label>
-                                    <select id="backtest-instrument" class="form-control">
-                                        <option value="">Use Strategy Default</option>
-                                        <option value="EUR_USD">EUR_USD</option>
-                                        <option value="GBP_USD">GBP_USD</option>
-                                        <option value="USD_JPY">USD_JPY</option>
-                                        <option value="XAU_USD">XAU_USD</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="backtest-timeframe">Timeframe (Override)</label>
-                                    <select id="backtest-timeframe" class="form-control">
-                                        <option value="">Use Strategy Default</option>
-                                        <option value="M5">5m</option>
-                                        <option value="M15">15m</option>
-                                        <option value="M30">30m</option>
-                                        <option value="H1">1h</option>
-                                    </select>
-                                </div>
-                                <div class="form-group" id="compare-strat-group" style="display: none;">
-                                    <label for="backtest-compare-select">Comparison Strategy</label>
-                                    <select id="backtest-compare-select" class="form-control">
-                                        <option value="">Choose Comparison Strategy</option>
-                                    </select>
-                                </div>
-                                <div class="form-group" style="flex: 0.8;">
-                                    <label for="backtest-count">Candles History Count</label>
-                                    <div class="range-slider-wrapper">
-                                        <input type="range" id="backtest-count" min="100" max="2000" step="50" value="500" class="form-control-range">
-                                        <span id="backtest-count-val">500</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="form-row mt-3" style="align-items: center; justify-content: space-between;">
-                                <div class="form-group form-checkbox-group" style="margin-bottom: 0; display: flex; gap: 24px; flex-direction: row;">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="backtest-compare-enable">
-                                        <span class="checkmark"></span>
-                                        Enable Strategy Comparison
-                                    </label>
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="backtest-refresh">
-                                        <span class="checkmark"></span>
-                                        Bypass Cache (Force API Fetch)
-                                    </label>
-                                </div>
-                                <div class="form-group-btn" style="width: 200px;">
-                                    <button type="submit" class="btn btn-primary btn-block" id="btn-run-backtest">
-                                        <i data-lucide="play"></i> Run Backtest
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="backtest-results-container" id="backtest-results" style="display: none;">
-                    <div class="backtest-metrics-grid">
-                        <div class="metric-box bg-panel">
-                            <h4>Win Rate</h4>
-                            <p class="metric-val" id="bt-win-rate">0%</p>
-                            <span class="metric-sub" id="bt-wins-losses">0 Wins / 0 Losses</span>
-                        </div>
-                        <div class="metric-box bg-panel">
-                            <h4>Net Return</h4>
-                            <p class="metric-val" id="bt-net-profit">0.00%</p>
-                            <span class="metric-sub text-green">Total Performance</span>
-                        </div>
-                        <div class="metric-box bg-panel">
-                            <h4>Max Drawdown</h4>
-                            <p class="metric-val text-red" id="bt-drawdown">0.00%</p>
-                            <span class="metric-sub">Peak to Valley</span>
-                        </div>
-                        <div class="metric-box bg-panel">
-                            <h4>Total Trades</h4>
-                            <p class="metric-val" id="bt-total-trades">0</p>
-                            <span class="metric-sub" id="bt-open-trades">0 Open Trades</span>
-                        </div>
-                    </div>
-
-                    <div class="backtest-charts-section mt-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h2>Cumulative Growth Curve (%)</h2>
-                                <i data-lucide="trending-up"></i>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-container">
-                                    <canvas id="equity-chart"></canvas>
-                                </div>
-                            </div>
+            <!-- Sidebar Tab Panes -->
+            <div class="tv-sidebar-content">
+                
+                <!-- 1. Watchlist & Quotes Pane -->
+                <div class="tv-pane active" id="tab-watchlist">
+                    <div class="tv-pane-header">
+                        <h3>Watchlist</h3>
+                        <div class="tv-pane-actions">
+                            <i data-lucide="refresh-cw" class="tv-clickable-icon" id="btn-refresh-quotes" title="Refresh Prices"></i>
                         </div>
                     </div>
                     
-                    <!-- Comparison Metrics Table -->
-                    <div class="card mt-4" id="backtest-comparison-card" style="display: none;">
-                        <div class="card-header">
-                            <h2>Strategy Performance Comparison</h2>
-                            <i data-lucide="git-compare"></i>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-striped text-center">
-                                    <thead>
-                                        <tr>
-                                            <th class="text-left">Performance Metric</th>
-                                            <th id="comp-label-primary">Primary Strategy</th>
-                                            <th id="comp-label-secondary">Comparison Strategy</th>
-                                            <th>Difference</th>
-                                            <th>Winner</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="comparison-tbody">
-                                        <!-- Dynamic comparison rows -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                    <div class="tv-watchlist-table-wrapper">
+                        <table class="tv-watchlist-table">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th class="text-right">Last</th>
+                                    <th class="text-right">Chg%</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tv-watchlist-tbody">
+                                <!-- Dynamic Watchlist Rows -->
+                            </tbody>
+                        </table>
                     </div>
 
-                    <div class="card mt-4">
-                        <div class="card-header">
-                            <h2>Simulated Trades Log</h2>
-                            <i data-lucide="list"></i>
+                    <!-- Selected Instrument Details Card -->
+                    <div class="tv-detail-card">
+                        <div class="tv-detail-header">
+                            <span id="detail-symbol-title">EUR/USD</span>
+                            <span class="badge-status-green">MARKET LIVE</span>
                         </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Type</th>
-                                            <th>Entry Time</th>
-                                            <th>Entry Price</th>
-                                            <th>TP Level</th>
-                                            <th>SL Level</th>
-                                            <th>Exit Time</th>
-                                            <th>Exit Price</th>
-                                            <th>Outcome</th>
-                                            <th>PnL (%)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="backtest-trades-tbody">
-                                        <!-- Dynamic Trade Rows -->
-                                    </tbody>
-                                </table>
+                        <div class="tv-detail-grid">
+                            <div class="tv-detail-item">
+                                <span class="label">Day High</span>
+                                <span class="val" id="detail-day-high">-</span>
+                            </div>
+                            <div class="tv-detail-item">
+                                <span class="label">Day Low</span>
+                                <span class="val" id="detail-day-low">-</span>
+                            </div>
+                            <div class="tv-detail-item">
+                                <span class="label">Volume</span>
+                                <span class="val" id="detail-volume">-</span>
+                            </div>
+                            <div class="tv-detail-item">
+                                <span class="label">Feed Time</span>
+                                <span class="val" id="detail-time">-</span>
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
-        </main>
+
+                <!-- 2. Quick Order Ticket / Trade Pane -->
+                <div class="tv-pane" id="tab-trade">
+                    <div class="tv-pane-header">
+                        <h3>Order Execution</h3>
+                        <span class="badge-live">BOT LINK</span>
+                    </div>
+
+                    <div class="tv-order-box">
+                        <div class="tv-order-type-tabs">
+                            <button class="tv-order-type-btn active" data-type="MARKET">Market</button>
+                            <button class="tv-order-type-btn" data-type="LIMIT">Limit</button>
+                            <button class="tv-order-type-btn" data-type="STOP">Stop</button>
+                        </div>
+
+                        <!-- Big BUY / SELL Execution Buttons -->
+                        <div class="tv-buy-sell-grid">
+                            <button class="tv-btn-sell" id="btn-order-sell">
+                                <span class="tv-action-name">SELL</span>
+                                <span class="tv-action-price" id="trade-sell-price">-</span>
+                            </button>
+                            <button class="tv-btn-buy" id="btn-order-buy">
+                                <span class="tv-action-name">BUY</span>
+                                <span class="tv-action-price" id="trade-buy-price">-</span>
+                            </button>
+                        </div>
+
+                        <!-- Order Input Fields -->
+                        <div class="tv-order-inputs mt-3">
+                            <div class="tv-form-group">
+                                <label>Units / Lot Size</label>
+                                <div class="tv-input-stepper">
+                                    <input type="number" id="order-lots" value="1.00" step="0.1" min="0.01" class="tv-input">
+                                    <span class="tv-input-addon">Lots</span>
+                                </div>
+                            </div>
+
+                            <div class="tv-form-row">
+                                <div class="tv-form-group col-6">
+                                    <label class="text-red">Stop Loss</label>
+                                    <input type="number" id="order-sl-pips" value="25" class="tv-input" placeholder="Pips">
+                                </div>
+                                <div class="tv-form-group col-6">
+                                    <label class="text-green">Take Profit</label>
+                                    <input type="number" id="order-tp-pips" value="50" class="tv-input" placeholder="Pips">
+                                </div>
+                            </div>
+
+                            <div class="tv-risk-calc-card">
+                                <div class="risk-line">
+                                    <span>Risk : Reward</span>
+                                    <strong class="text-green" id="order-rrr">1 : 2.00</strong>
+                                </div>
+                                <div class="risk-line">
+                                    <span>Est. Risk</span>
+                                    <strong class="text-red" id="order-risk-est">-$25.00</strong>
+                                </div>
+                                <div class="risk-line">
+                                    <span>Est. Reward</span>
+                                    <strong class="text-green" id="order-reward-est">+$50.00</strong>
+                                </div>
+                            </div>
+
+                            <button class="tv-btn-execute" id="btn-execute-trade-order">
+                                <i data-lucide="zap"></i>
+                                <span>Place Instant Order to Bot</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Claude AI Analyst Assistant Pane -->
+                <div class="tv-pane" id="tab-ai">
+                    <div class="tv-pane-header">
+                        <h3>Claude AI Analyst</h3>
+                        <i data-lucide="sparkles" style="color: #a855f7;"></i>
+                    </div>
+                    <div class="tv-ai-card">
+                        <div class="tv-ai-status">
+                            <span class="status-indicator online"></span>
+                            <span>OpenRouter Nemotron / Claude Engine</span>
+                        </div>
+                        <div class="tv-ai-content" id="sidebar-ai-text">
+                            Click below to generate live AI technical analysis, support/resistance levels, and market bias.
+                        </div>
+                        <button class="tv-btn-secondary btn-block mt-3" id="btn-sidebar-trigger-ai">
+                            <i data-lucide="sparkles"></i>
+                            <span>Run AI Analysis on Chart</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Telegram Signals Stream Pane -->
+                <div class="tv-pane" id="tab-alerts">
+                    <div class="tv-pane-header">
+                        <h3>Alerts & Signals</h3>
+                        <span class="badge-alert-count" id="alerts-count-badge">0</span>
+                    </div>
+                    <div class="tv-alerts-stream" id="sidebar-alerts-stream">
+                        <div class="empty-alerts">No alerts generated yet. Active bot signals will appear here in real-time.</div>
+                    </div>
+                </div>
+
+                <!-- 5. Active Bot Workers Pane -->
+                <div class="tv-pane" id="tab-bots">
+                    <div class="tv-pane-header">
+                        <h3>Active Workers</h3>
+                        <i data-lucide="refresh-cw" class="tv-clickable-icon" id="btn-refresh-bots"></i>
+                    </div>
+                    <div class="tv-bots-list" id="sidebar-bots-list">
+                        <!-- Dynamic Bot Worker Items -->
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Bottom Dock: TradingView Strategy Tester / Pine Editor / Bot Manager / Console Logs -->
+    <section class="tv-bottom-dock" id="tv-bottom-dock">
+        <!-- Bottom Dock Tab Bar -->
+        <div class="tv-dock-header">
+            <div class="tv-dock-tabs">
+                <button class="tv-dock-tab active" data-dock="dock-tester">
+                    <i data-lucide="line-chart"></i>
+                    <span>Strategy Tester</span>
+                </button>
+                <button class="tv-dock-tab" data-dock="dock-bots">
+                    <i data-lucide="cpu"></i>
+                    <span>Trading Panel & Bots</span>
+                </button>
+                <button class="tv-dock-tab" data-dock="dock-editor">
+                    <i data-lucide="sliders"></i>
+                    <span>Pine Strategy Inputs</span>
+                </button>
+                <button class="tv-dock-tab" data-dock="dock-console">
+                    <i data-lucide="terminal"></i>
+                    <span>Console Logs</span>
+                </button>
+            </div>
+
+            <!-- Dock Controls -->
+            <div class="tv-dock-controls">
+                <button class="tv-dock-control-btn" id="btn-dock-toggle-size" title="Maximize/Restore Panel">
+                    <i data-lucide="chevron-up" id="icon-dock-toggle"></i>
+                </button>
+                <button class="tv-dock-control-btn" id="btn-dock-collapse" title="Collapse Panel">
+                    <i data-lucide="minus"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dock Content Body -->
+        <div class="tv-dock-body">
+            
+            <!-- 1. Strategy Tester Pane (Backtesting Engine) -->
+            <div class="tv-dock-pane active" id="dock-tester">
+                <div class="tv-tester-toolbar">
+                    <div class="tv-tester-controls">
+                        <div class="tv-control-inline">
+                            <label>Strategy:</label>
+                            <select id="bt-dock-strategy" class="tv-select-sm">
+                                <!-- Options populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="tv-control-inline">
+                            <label>History Bars:</label>
+                            <select id="bt-dock-count" class="tv-select-sm">
+                                <option value="150">150 Candles</option>
+                                <option value="300" selected>300 Candles</option>
+                                <option value="500">500 Candles</option>
+                                <option value="1000">1000 Candles</option>
+                            </select>
+                        </div>
+                        <button class="tv-btn-primary tv-btn-sm" id="btn-dock-run-backtest">
+                            <i data-lucide="play"></i>
+                            <span>Run Backtest</span>
+                        </button>
+                    </div>
+
+                    <div class="tv-tester-period" id="dock-bt-period">
+                        Market History: <strong id="dock-period-range">-</strong>
+                    </div>
+                </div>
+
+                <!-- Backtest Performance Metric Strips -->
+                <div class="tv-tester-metrics-strip">
+                    <div class="tv-metric-cell">
+                        <span class="m-label">Net Profit</span>
+                        <strong class="m-val" id="dock-net-profit">0.00%</strong>
+                        <span class="m-sub text-green" id="dock-net-pips">+0.0 pips</span>
+                    </div>
+                    <div class="tv-metric-cell">
+                        <span class="m-label">Profit Factor</span>
+                        <strong class="m-val text-green" id="dock-profit-factor">0.00</strong>
+                        <span class="m-sub">Gross Win/Loss</span>
+                    </div>
+                    <div class="tv-metric-cell">
+                        <span class="m-label">Win Rate</span>
+                        <strong class="m-val" id="dock-win-rate">0%</strong>
+                        <span class="m-sub" id="dock-win-loss">0 W / 0 L</span>
+                    </div>
+                    <div class="tv-metric-cell">
+                        <span class="m-label">Max Drawdown</span>
+                        <strong class="m-val text-red" id="dock-max-drawdown">0.00%</strong>
+                        <span class="m-sub">Peak to Valley</span>
+                    </div>
+                    <div class="tv-metric-cell">
+                        <span class="m-label">Total Trades</span>
+                        <strong class="m-val" id="dock-total-trades">0</strong>
+                        <span class="m-sub" id="dock-open-trades">0 Open</span>
+                    </div>
+                </div>
+
+                <!-- Strategy Tester Split: Equity Curve + List of Trades -->
+                <div class="tv-tester-split-view">
+                    <!-- Left: Equity Curve Chart -->
+                    <div class="tv-tester-equity-box">
+                        <div class="tv-box-title">Cumulative Growth Curve (%)</div>
+                        <div class="tv-equity-canvas-wrapper">
+                            <canvas id="dock-equity-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Right: Trade Log Table -->
+                    <div class="tv-tester-trades-box">
+                        <div class="tv-box-title">List of Simulated Trades</div>
+                        <div class="tv-trades-table-wrapper">
+                            <table class="tv-trades-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Type</th>
+                                        <th>Entry Time</th>
+                                        <th>Price</th>
+                                        <th>TP</th>
+                                        <th>SL</th>
+                                        <th>Exit Time</th>
+                                        <th>Result</th>
+                                        <th>Pips</th>
+                                        <th>PnL (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dock-trades-tbody">
+                                    <tr><td colspan="10" class="text-center py-4 text-muted">Click "Run Backtest" above to simulate trades over market history.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Trading Panel & Bots Pane -->
+            <div class="tv-dock-pane" id="dock-bots">
+                <div class="tv-bots-grid" id="dock-bots-grid">
+                    <!-- Dynamic Bot Cards -->
+                </div>
+            </div>
+
+            <!-- 3. Pine Strategy Inputs Pane -->
+            <div class="tv-dock-pane" id="dock-editor">
+                <div class="tv-editor-form-wrapper">
+                    <form id="tv-quick-strategy-form">
+                        <div class="form-row">
+                            <div class="form-group col-3">
+                                <label>Strategy Name</label>
+                                <input type="text" id="quick-strat-name" class="tv-input" value="EUR/USD Custom Fib" required>
+                            </div>
+                            <div class="form-group col-3">
+                                <label>Pivot Left/Right Bars</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" id="quick-strat-left" class="tv-input" value="5" min="1">
+                                    <input type="number" id="quick-strat-right" class="tv-input" value="5" min="1">
+                                </div>
+                            </div>
+                            <div class="form-group col-3">
+                                <label>Fib Signal Level</label>
+                                <select id="quick-strat-signal-level" class="tv-input">
+                                    <option value="0.618" selected>0.618 (Golden Pocket)</option>
+                                    <option value="0.5">0.500 (Midpoint)</option>
+                                    <option value="0.786">0.786 (Deep Pullback)</option>
+                                    <option value="0.382">0.382 (Shallow Retracement)</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-3">
+                                <label>Min Fib Range (Pips/Pts)</label>
+                                <input type="number" step="0.0001" id="quick-strat-min-fib" class="tv-input" value="0.0030">
+                            </div>
+                        </div>
+
+                        <div class="form-row mt-3" style="align-items: center; justify-content: space-between;">
+                            <div style="display: flex; gap: 20px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="quick-strat-trend" checked>
+                                    <span class="checkmark"></span>
+                                    Trend Filter (EMA 50)
+                                </label>
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="quick-strat-candle" checked>
+                                    <span class="checkmark"></span>
+                                    Candle Confirmation (Rejection Wick)
+                                </label>
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="quick-strat-telegram" checked>
+                                    <span class="checkmark"></span>
+                                    Broadcast to Telegram
+                                </label>
+                            </div>
+                            <button type="submit" class="tv-btn-primary">
+                                <i data-lucide="save"></i>
+                                <span>Save & Deploy Configuration</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 4. Console Logs Pane -->
+            <div class="tv-dock-pane" id="dock-console">
+                <div class="tv-console-output" id="dock-console-logs">
+                    <div class="tv-log-line">[SYSTEM] TradingView Hub initialized. Connected to Twelve Data and Telegram API.</div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Indicators Modal -->
+    <div class="modal-backdrop" id="modal-indicators">
+        <div class="modal-content" style="width: 480px;">
+            <div class="modal-header">
+                <h2>Technical Indicators & Overlays</h2>
+                <i data-lucide="x" class="modal-close" data-close="modal-indicators"></i>
+            </div>
+            <div class="modal-body">
+                <div class="indicator-list">
+                    <div class="indicator-item">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="ind-ema50" checked>
+                            <span class="checkmark"></span>
+                            <div>
+                                <strong>EMA 50 (Baseline Trend)</strong>
+                                <div class="text-muted" style="font-size: 11px;">50-period Exponential Moving Average</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="indicator-item mt-3">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="ind-ema200">
+                            <span class="checkmark"></span>
+                            <div>
+                                <strong>EMA 200 (Macro Trend)</strong>
+                                <div class="text-muted" style="font-size: 11px;">200-period Exponential Moving Average</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="indicator-item mt-3">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="ind-fib" checked>
+                            <span class="checkmark"></span>
+                            <div>
+                                <strong>Auto Fibonacci Retracement Levels</strong>
+                                <div class="text-muted" style="font-size: 11px;">0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="indicator-item mt-3">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="ind-volume" checked>
+                            <span class="checkmark"></span>
+                            <div>
+                                <strong>Volume Histogram</strong>
+                                <div class="text-muted" style="font-size: 11px;">Candle tick volume overlay</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-close="modal-indicators">Apply Indicators</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Properties / Settings Modal -->
+    <div class="modal-backdrop" id="modal-settings">
+        <div class="modal-content" style="width: 480px;">
+            <div class="modal-header">
+                <h2>Chart Properties & Theme</h2>
+                <i data-lucide="x" class="modal-close" data-close="modal-settings"></i>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Bullish Candle Color</label>
+                    <input type="color" id="set-up-color" class="tv-color-picker" value="#089981">
+                </div>
+                <div class="form-group mt-3">
+                    <label>Bearish Candle Color</label>
+                    <input type="color" id="set-down-color" class="tv-color-picker" value="#f23645">
+                </div>
+                <div class="form-group mt-3">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="set-watermark" checked>
+                        <span class="checkmark"></span>
+                        Show Background Watermark
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-close="modal-settings">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btn-save-chart-settings">Save Properties</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div class="modal-backdrop" id="modal-shortcuts">
+        <div class="modal-content" style="width: 440px;">
+            <div class="modal-header">
+                <h2>TradingView Keyboard Shortcuts</h2>
+                <i data-lucide="x" class="modal-close" data-close="modal-shortcuts"></i>
+            </div>
+            <div class="modal-body">
+                <table class="tv-watchlist-table">
+                    <tr><td><code>Alt + T</code></td><td>Trend Line Tool</td></tr>
+                    <tr><td><code>Alt + F</code></td><td>Fibonacci Retracement Tool</td></tr>
+                    <tr><td><code>Ctrl + Z</code></td><td>Undo last action</td></tr>
+                    <tr><td><code>Ctrl + Y</code></td><td>Redo action</td></tr>
+                    <tr><td><code>1-7</code></td><td>Switch Timeframes (1m - 1D)</td></tr>
+                    <tr><td><code>Space</code></td><td>Replay Play / Pause</td></tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-close="modal-shortcuts">Got It</button>
+            </div>
+        </div>
     </div>
 
     <!-- Strategy Add/Edit Modal (Premium Drawer Form) -->
     <div class="modal-backdrop" id="strategy-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-title">Create New Strategy</h2>
-                <i data-lucide="x" class="modal-close" id="modal-close-btn"></i>
+                <h2 id="modal-title">Create New Automated Strategy</h2>
+                <i data-lucide="x" class="modal-close" id="modal-close-btn" data-close="strategy-modal"></i>
             </div>
             <form id="strategy-form">
                 <input type="hidden" id="strat-id">
@@ -482,111 +852,77 @@
                                 </select>
                             </div>
                             <div class="form-group col-4">
-                                <label for="strat-signal-level">Signal Entry Level</label>
+                                <label for="strat-signal-level">Signal Fib Level</label>
                                 <select id="strat-signal-level" class="form-control">
-                                    <option value="0">0.000</option>
-                                    <option value="0.25">0.250</option>
+                                    <option value="0.618">0.618 (Golden Pocket)</option>
                                     <option value="0.5">0.500</option>
-                                    <option value="0.618" selected>0.618</option>
                                     <option value="0.786">0.786</option>
-                                    <option value="0.9">0.900</option>
-                                    <option value="1">1.000</option>
+                                    <option value="0.382">0.382</option>
                                 </select>
                             </div>
                         </div>
 
-                        <div class="form-row mt-3 card bg-panel p-3">
-                            <h4 class="mb-2">TP / SL Target Fib Levels</h4>
-                            <div class="form-row">
-                                <div class="form-group col-3">
-                                    <label for="strat-bull-tp">Bullish TP Level</label>
-                                    <select id="strat-bull-tp" class="form-control">
-                                        <option value="0" selected>0.0</option>
-                                        <option value="0.25">0.25</option>
-                                        <option value="0.5">0.5</option>
-                                        <option value="0.618">0.618</option>
-                                    </select>
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-bull-sl">Bullish SL Level</label>
-                                    <select id="strat-bull-sl" class="form-control">
-                                        <option value="1" selected>1.0</option>
-                                        <option value="0.9">0.9</option>
-                                        <option value="0.786">0.786</option>
-                                    </select>
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-bear-tp">Bearish TP Level</label>
-                                    <select id="strat-bear-tp" class="form-control">
-                                        <option value="0" selected>0.0</option>
-                                        <option value="0.25">0.25</option>
-                                        <option value="0.5">0.5</option>
-                                        <option value="0.618">0.618</option>
-                                    </select>
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-bear-sl">Bearish SL Level</label>
-                                    <select id="strat-bear-sl" class="form-control">
-                                        <option value="1" selected>1.0</option>
-                                        <option value="0.9">0.9</option>
-                                        <option value="0.786">0.786</option>
-                                    </select>
-                                </div>
+                        <div class="form-row mt-3">
+                            <div class="form-group col-3">
+                                <label for="strat-bull-tp">Bullish TP Level</label>
+                                <input type="text" id="strat-bull-tp" class="form-control" value="0">
+                            </div>
+                            <div class="form-group col-3">
+                                <label for="strat-bull-sl">Bullish SL Level</label>
+                                <input type="text" id="strat-bull-sl" class="form-control" value="1">
+                            </div>
+                            <div class="form-group col-3">
+                                <label for="strat-bear-tp">Bearish TP Level</label>
+                                <input type="text" id="strat-bear-tp" class="form-control" value="0">
+                            </div>
+                            <div class="form-group col-3">
+                                <label for="strat-bear-sl">Bearish SL Level</label>
+                                <input type="text" id="strat-bear-sl" class="form-control" value="1">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Tab Content: Swing & Fib Parameters -->
+                    <!-- Tab Content: Pivot & Fib Settings -->
                     <div class="tab-pane" id="tab-swing">
                         <div class="form-row">
-                            <div class="form-group col-3">
+                            <div class="form-group col-6">
                                 <label for="strat-left-bars">Left Pivot Bars</label>
-                                <input type="number" id="strat-left-bars" class="form-control" value="5" min="1" required>
+                                <input type="number" id="strat-left-bars" class="form-control" value="5" min="1">
                             </div>
-                            <div class="form-group col-3">
+                            <div class="form-group col-6">
                                 <label for="strat-right-bars">Right Pivot Bars</label>
-                                <input type="number" id="strat-right-bars" class="form-control" value="5" min="1" required>
-                            </div>
-                            <div class="form-group col-3">
-                                <label for="strat-min-swing-size">Min Swing Size</label>
-                                <input type="number" id="strat-min-swing-size" class="form-control" value="0.0" step="0.0001" required>
-                            </div>
-                            <div class="form-group col-3">
-                                <label for="strat-min-fib-range">Min Fib Range</label>
-                                <input type="number" id="strat-min-fib-range" class="form-control" value="3.0" step="0.0001" required>
-                                <small class="text-muted">EUR_USD: ~0.0030 / XAU: ~3.0</small>
+                                <input type="number" id="strat-right-bars" class="form-control" value="5" min="1">
                             </div>
                         </div>
 
                         <div class="form-row mt-3">
                             <div class="form-group col-4">
-                                <label for="strat-fib-direction">Fib Direction Mode</label>
-                                <select id="strat-fib-direction" class="form-control">
-                                    <option value="Follow Trend">Follow Trend</option>
-                                    <option value="Both Directions">Both Directions</option>
-                                    <option value="Bullish Only">Bullish Only</option>
-                                    <option value="Bearish Only">Bearish Only</option>
-                                </select>
+                                <label for="strat-min-swing-size">Min Swing Size (Points)</label>
+                                <input type="number" step="0.0001" id="strat-min-swing-size" class="form-control" value="0.0">
+                            </div>
+                            <div class="form-group col-4">
+                                <label for="strat-min-fib-range">Min Fib Range</label>
+                                <input type="number" step="0.0001" id="strat-min-fib-range" class="form-control" value="0.0030">
                             </div>
                             <div class="form-group col-4">
                                 <label for="strat-min-bars-between">Min Bars Between Swings</label>
                                 <input type="number" id="strat-min-bars-between" class="form-control" value="1" min="1">
-                            </div>
-                            <div class="form-group col-4 d-flex align-items-center pt-4">
-                                <label class="checkbox-container">
-                                    <input type="checkbox" id="strat-require-alt" checked>
-                                    <span class="checkmark"></span>
-                                    Require Alternating Swings
-                                </label>
                             </div>
                         </div>
 
                         <div class="form-row mt-3">
                             <div class="form-group col-6">
                                 <label class="checkbox-container">
+                                    <input type="checkbox" id="strat-require-alt" checked>
+                                    <span class="checkmark"></span>
+                                    Require Alternating Swings (High -> Low)
+                                </label>
+                            </div>
+                            <div class="form-group col-6">
+                                <label class="checkbox-container">
                                     <input type="checkbox" id="strat-recalc-extreme">
                                     <span class="checkmark"></span>
-                                    Recalculate Fib on Price Extremes
+                                    Recalculate on Extreme Outliers
                                 </label>
                             </div>
                         </div>
@@ -594,132 +930,120 @@
 
                     <!-- Tab Content: Filters & Times -->
                     <div class="tab-pane" id="tab-filters">
-                        <!-- Time Window filter -->
-                        <div class="card p-3 bg-panel">
-                            <div class="d-flex justify-content-between mb-2">
-                                <h4>Trading Time Filters (America/New_York)</h4>
-                                <label class="switch-container">
-                                    <input type="checkbox" id="strat-use-time-filter">
-                                    <span class="switch-slider"></span>
-                                </label>
+                        <div class="form-group">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="strat-use-time-filter">
+                                <span class="checkmark"></span>
+                                Enable Trading Hours Window Filter
+                            </label>
+                        </div>
+                        <div class="form-row" id="time-filter-inputs" style="display: none;">
+                            <div class="form-group col-6">
+                                <label>Start Time (HH:MM)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" id="strat-start-hour" class="form-control" placeholder="08" min="0" max="23">
+                                    <input type="number" id="strat-start-minute" class="form-control" placeholder="00" min="0" max="59">
+                                </div>
                             </div>
-                            <div class="form-row" id="time-filter-inputs" style="opacity: 0.5; pointer-events: none;">
-                                <div class="form-group col-3">
-                                    <label for="strat-start-hour">Start Hour</label>
-                                    <input type="number" id="strat-start-hour" class="form-control" value="8" min="0" max="23">
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-start-minute">Start Minute</label>
-                                    <input type="number" id="strat-start-minute" class="form-control" value="0" min="0" max="59">
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-end-hour">End Hour</label>
-                                    <input type="number" id="strat-end-hour" class="form-control" value="16" min="0" max="23">
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-end-minute">End Minute</label>
-                                    <input type="number" id="strat-end-minute" class="form-control" value="0" min="0" max="59">
+                            <div class="form-group col-6">
+                                <label>End Time (HH:MM)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" id="strat-end-hour" class="form-control" placeholder="16" min="0" max="23">
+                                    <input type="number" id="strat-end-minute" class="form-control" placeholder="00" min="0" max="59">
                                 </div>
                             </div>
                         </div>
 
-                        <!-- No Trade Windows -->
-                        <div class="card p-3 bg-panel mt-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <h4>No Trade Break window 1 (9:30-10:00 default)</h4>
-                                <label class="switch-container">
-                                    <input type="checkbox" id="strat-use-nt1" checked>
-                                    <span class="switch-slider"></span>
-                                </label>
+                        <div class="form-group mt-3">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="strat-use-nt1" checked>
+                                <span class="checkmark"></span>
+                                Avoid US Market Open No-Trade Window (09:30 - 10:00 EST)
+                            </label>
+                        </div>
+                        <div class="form-row" id="nt1-inputs">
+                            <input type="hidden" id="strat-nt1-start-h" value="9">
+                            <input type="hidden" id="strat-nt1-start-m" value="30">
+                            <input type="hidden" id="strat-nt1-end-h" value="10">
+                            <input type="hidden" id="strat-nt1-end-m" value="0">
+                        </div>
+
+                        <div class="form-group mt-3">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="strat-use-trend">
+                                <span class="checkmark"></span>
+                                Enable Moving Average Trend Filter
+                            </label>
+                        </div>
+                        <div class="form-row" id="trend-inputs" style="display: none;">
+                            <div class="form-group col-4">
+                                <label>MA Type</label>
+                                <select id="strat-trend-ma-type" class="form-control">
+                                    <option value="SMA">SMA</option>
+                                    <option value="EMA">EMA</option>
+                                </select>
                             </div>
-                            <div class="form-row" id="nt1-inputs">
-                                <div class="form-group col-3">
-                                    <label for="strat-nt1-start-h">Start Hour</label>
-                                    <input type="number" id="strat-nt1-start-h" class="form-control" value="9" min="0" max="23">
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-nt1-start-m">Start Min</label>
-                                    <input type="number" id="strat-nt1-start-m" class="form-control" value="30" min="0" max="59">
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-nt1-end-h">End Hour</label>
-                                    <input type="number" id="strat-nt1-end-h" class="form-control" value="10" min="0" max="23">
-                                </div>
-                                <div class="form-group col-3">
-                                    <label for="strat-nt1-end-m">End Min</label>
-                                    <input type="number" id="strat-nt1-end-m" class="form-control" value="0" min="0" max="59">
-                                </div>
+                            <div class="form-group col-4">
+                                <label>Length</label>
+                                <input type="number" id="strat-trend-len" class="form-control" value="50">
+                            </div>
+                            <div class="form-group col-4">
+                                <label>Minimum Slope</label>
+                                <input type="number" step="0.0001" id="strat-trend-slope" class="form-control" value="0.0">
                             </div>
                         </div>
 
-                        <!-- Strategy Indicators and Filters -->
-                        <div class="card p-3 bg-panel mt-3">
-                            <div class="form-row">
-                                <div class="form-group col-4">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="strat-use-trend">
-                                        <span class="checkmark"></span>
-                                        Enable Trend MA Filter
-                                    </label>
-                                    <div class="filter-nested-inputs mt-2" id="trend-inputs" style="display:none;">
-                                        <label for="strat-trend-ma-type">MA Type</label>
-                                        <select id="strat-trend-ma-type" class="form-control mb-1">
-                                            <option value="SMA">SMA</option>
-                                            <option value="EMA">EMA</option>
-                                        </select>
-                                        <label for="strat-trend-len">Length</label>
-                                        <input type="number" id="strat-trend-len" class="form-control mb-1" value="50" min="5">
-                                        <label for="strat-trend-slope">Min MA Slope</label>
-                                        <input type="number" id="strat-trend-slope" class="form-control" value="0.0" step="0.0001">
-                                    </div>
-                                </div>
+                        <div class="form-group mt-3">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="strat-use-candle">
+                                <span class="checkmark"></span>
+                                Enable Candlestick Confirmation
+                            </label>
+                        </div>
+                        <div class="form-row" id="candle-inputs" style="display: none;">
+                            <div class="form-group col-6">
+                                <label>Confirmation Type</label>
+                                <select id="strat-candle-type" class="form-control">
+                                    <option value="Rejection Candle">Rejection Candle (Wick Ratio)</option>
+                                    <option value="Close Confirmation">Close Beyond Level</option>
+                                    <option value="Engulfing Candle">Engulfing Candle</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-6">
+                                <label>Minimum Wick Ratio</label>
+                                <input type="number" step="0.05" id="strat-wick-ratio" class="form-control" value="0.5">
+                            </div>
+                        </div>
 
-                                <div class="form-group col-4">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="strat-use-candle">
-                                        <span class="checkmark"></span>
-                                        Candle Confirmation
-                                    </label>
-                                    <div class="filter-nested-inputs mt-2" id="candle-inputs" style="display:none;">
-                                        <label for="strat-candle-type">Type</label>
-                                        <select id="strat-candle-type" class="form-control mb-1">
-                                            <option value="Touch Only">Touch Only</option>
-                                            <option value="Close Confirmation">Close Confirmation</option>
-                                            <option value="Rejection Candle" selected>Rejection Candle</option>
-                                            <option value="Engulfing Candle">Engulfing Candle</option>
-                                        </select>
-                                        <label for="strat-wick-ratio">Min Wick Ratio</label>
-                                        <input type="number" id="strat-wick-ratio" class="form-control" value="0.5" step="0.05" min="0.1" max="0.9">
-                                    </div>
-                                </div>
-
-                                <div class="form-group col-4">
-                                    <label class="checkbox-container">
-                                        <input type="checkbox" id="strat-use-consolidation">
-                                        <span class="checkmark"></span>
-                                        Consolidation Filter
-                                    </label>
-                                    <div class="filter-nested-inputs mt-2" id="consolidation-inputs" style="display:none;">
-                                        <label for="strat-consolidation-len">Length</label>
-                                        <input type="number" id="strat-consolidation-len" class="form-control mb-1" value="20">
-                                        <label for="strat-consolidation-atr">Max ATR Factor</label>
-                                        <input type="number" id="strat-consolidation-atr" class="form-control" value="3.0" step="0.1">
-                                    </div>
-                                </div>
+                        <div class="form-group mt-3">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="strat-use-consolidation">
+                                <span class="checkmark"></span>
+                                Enable ATR Consolidation Filter
+                            </label>
+                        </div>
+                        <div class="form-row" id="consolidation-inputs" style="display: none;">
+                            <div class="form-group col-6">
+                                <label>Consolidation Length</label>
+                                <input type="number" id="strat-consolidation-len" class="form-control" value="20">
+                            </div>
+                            <div class="form-group col-6">
+                                <label>Max ATR Multiplier</label>
+                                <input type="number" step="0.1" id="strat-consolidation-atr" class="form-control" value="3.0">
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="btn-modal-cancel">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="btn-modal-save">Save Configuration</button>
+                    <button type="button" class="btn btn-secondary" id="btn-modal-cancel" data-close="strategy-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-modal-save">Save & Deploy Bot</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Custom JS -->
+    <!-- Main TradingView Client Script -->
     <script src="app.js"></script>
 </body>
 </html>
