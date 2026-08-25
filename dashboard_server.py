@@ -18,6 +18,8 @@ import twelvedata_feed
 import strategy as fib_strategy
 import custom_strategy_template as breakout_strategy
 import ai_strategy
+import orb_strategy
+import orb_session_strategy
 from strategy import Event
 
 # ============================================================================
@@ -170,6 +172,10 @@ class BotWorker:
                 events = breakout_strategy.run_strategy(df, cfg_mock)
             elif strat_type == "AIClaude":
                 events = ai_strategy.run_strategy(df, cfg_mock)
+            elif strat_type == "ORB":
+                events = orb_strategy.run_strategy(df, cfg_mock)
+            elif strat_type == "ORBSession":
+                events = orb_session_strategy.run_strategy(df, cfg_mock)
             else:
                 events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -199,6 +205,10 @@ class BotWorker:
                         events = breakout_strategy.run_strategy(df, cfg_mock)
                     elif strat_type == "AIClaude":
                         events = ai_strategy.run_strategy(df, cfg_mock)
+                    elif strat_type == "ORB":
+                        events = orb_strategy.run_strategy(df, cfg_mock)
+                    elif strat_type == "ORBSession":
+                        events = orb_session_strategy.run_strategy(df, cfg_mock)
                     else:
                         events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -656,6 +666,10 @@ def run_backtest(req: BacktestRequestSchema):
             events = breakout_strategy.run_strategy(df, cfg_mock)
         elif strat_type == "AIClaude":
             events = ai_strategy.run_strategy(df, cfg_mock)
+        elif strat_type == "ORB":
+            events = orb_strategy.run_strategy(df, cfg_mock)
+        elif strat_type == "ORBSession":
+            events = orb_session_strategy.run_strategy(df, cfg_mock)
         else:
             events = fib_strategy.run_strategy(df, cfg_mock)
 
@@ -813,6 +827,10 @@ def analyze_chart(req: AnalyzeRequestSchema):
             events = breakout_strategy.run_strategy(df, cfg_mock)
         elif req.strategy_type == "AIClaude":
             events = ai_strategy.run_strategy(df, cfg_mock)
+        elif req.strategy_type == "ORB":
+            events = orb_strategy.run_strategy(df, cfg_mock)
+        elif req.strategy_type == "ORBSession":
+            events = orb_session_strategy.run_strategy(df, cfg_mock)
         else:
             events = fib_strategy.run_strategy(df, cfg_mock)
 

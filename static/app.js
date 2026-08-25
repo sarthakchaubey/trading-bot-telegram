@@ -331,7 +331,9 @@ async function loadMainChartData(forceRefresh = false) {
     const stratNameMap = {
         "Fibonacci": "Swing Fib (0.618)",
         "MomentumBreakout": "Momentum Breakout",
-        "AIClaude": "Claude AI Analyst"
+        "AIClaude": "Claude AI Analyst",
+        "ORB": "Opening Range Breakout",
+        "ORBSession": "ORB Session Liquidity"
     };
     document.getElementById("legend-strategy-text").textContent = stratNameMap[strategy] || strategy;
 

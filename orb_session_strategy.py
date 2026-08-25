@@ -515,3 +515,70 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ----------------------------------------------------------------------------
+# Dashboard Compatibility Wrapper
+# ----------------------------------------------------------------------------
+
+def run_strategy(df: pd.DataFrame, cfg) -> List[Event]:
+    """
+    Dashboard entry point wrapper for the ORB Session Strategy.
+    """
+    from strategy import Event
+    
+    # Extract values from cfg if present, otherwise use defaults
+    orb_cfg = Config(
+        tz=getattr(cfg, "TIME_ZONE", "America/New_York"),
+        asian_start=time(int(getattr(cfg, "ASIAN_START_HOUR", 20)), int(getattr(cfg, "ASIAN_START_MINUTE", 0))),
+        asian_end=time(int(getattr(cfg, "ASIAN_END_HOUR", 0)), int(getattr(cfg, "ASIAN_END_MINUTE", 0))),
+        london_start=time(int(getattr(cfg, "LONDON_START_HOUR", 2)), int(getattr(cfg, "LONDON_START_MINUTE", 0))),
+        london_end=time(int(getattr(cfg, "LONDON_END_HOUR", 5)), int(getattr(cfg, "LONDON_END_MINUTE", 0))),
+        ny_open=time(int(getattr(cfg, "START_HOUR", 9)), int(getattr(cfg, "START_MINUTE", 30))),
+        or_minutes=int(getattr(cfg, "RANGE_MINUTES", 15)),
+        displacement_window_minutes=int(getattr(cfg, "DISPLACEMENT_WINDOW_MINUTES", 90)),
+        displacement_min_candles=int(getattr(cfg, "DISPLACEMENT_MIN_CANDLES", 2)),
+        displacement_atr_mult=float(getattr(cfg, "DISPLACEMENT_ATR_MULT", 1.3)),
+        atr_period=int(getattr(cfg, "ATR_PERIOD", 14)),
+        retrace_window_minutes=int(getattr(cfg, "RETRACE_WINDOW_MINUTES", 120)),
+        zone_buffer_atr_mult=float(getattr(cfg, "ZONE_BUFFER_ATR_MULT", 0.1)),
+        risk_reward=float(getattr(cfg, "RISK_REWARD", 2.0)),
+        sweep_min_atr_mult=float(getattr(cfg, "SWEEP_MIN_ATR_MULT", 0.05)),
+        max_trades_per_day=int(getattr(cfg, "MAX_TRADES_PER_DAY", 1)),
+        session_bias_required=bool(getattr(cfg, "SESSION_BIAS_REQUIRED", True))
+    )
+    
+    # Run the strategy
+    strat = OrbSessionStrategy(orb_cfg)
+    trades_df = strat.run(df)
+    
+    events = []
+    if not trades_df.empty:
+        for _, row in trades_df.iterrows():
+            kind = "BUY" if row["direction"] == "long" else "SELL"
+            entry_time = row["entry_time"]
+            if isinstance(entry_time, str):
+                entry_time = pd.Timestamp(entry_time)
+            
+            # Make sure timestamp is timezone-aware UTC for dashboard rendering
+            if entry_time.tz is not None:
+                entry_time = entry_time.tz_convert("UTC")
+            else:
+                entry_time = entry_time.tz_localize("UTC")
+                
+            tp = float(row["target"])
+            sl = float(row["stop"])
+            price = float(row["entry"])
+            
+            events.append(Event(
+                kind=kind,
+                time=entry_time,
+                price=price,
+                tp=tp,
+                sl=sl,
+                fib_high=tp if kind == "BUY" else sl,
+                fib_low=sl if kind == "BUY" else tp
+            ))
+            
+    return events
+
